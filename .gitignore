@@ -1,0 +1,3 @@
+build/
+dlxnet/**/*.pb.h
+dlxnet/**/*.pb.cc
