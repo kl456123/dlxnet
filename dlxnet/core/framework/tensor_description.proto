@@ -6,12 +6,12 @@ import "dlxnet/core/framework/tensor_shape.proto";
 import "dlxnet/core/framework/allocation_description.proto";
 
 message TensorDescription {
-  // Data type of tensor elements
-  DataType dtype = 1;
+    // Data type of tensor elements
+    DataType dtype = 1;
 
-  // Shape of the tensor.
-  TensorShapeProto shape = 2;
+    // Shape of the tensor.
+    TensorShapeProto shape = 2;
 
-  // Information about the size and allocator used for the data
-  AllocationDescription allocation_description = 4;
+    // Information about the size and allocator used for the data
+    AllocationDescription allocation_description = 4;
 };
