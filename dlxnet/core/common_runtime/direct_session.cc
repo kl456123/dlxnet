@@ -1,4 +1,9 @@
+#include "absl/container/flat_hash_set.h"
+
 #include "dlxnet/core/common_runtime/direct_session.h"
+#include "dlxnet/core/common_runtime/session_factory.h"
+#include "dlxnet/core/common_runtime/device_factory.h"
+#include "dlxnet/core/common_runtime/device_mgr.h"
 
 
 namespace dlxnet{
@@ -32,7 +37,7 @@ namespace dlxnet{
 
                 // Must do this before the CPU allocator is created.
                 // if (options.config.graph_options().build_cost_model() > 0) {
-                    // EnableCPUAllocatorFullStats(true);
+                // EnableCPUAllocatorFullStats(true);
                 // }
                 std::vector<std::unique_ptr<Device>> devices;
                 TF_RETURN_IF_ERROR(DeviceFactory::AddDevices(
@@ -97,4 +102,116 @@ namespace dlxnet{
             }
     };
     static DirectSessionRegistrar registrar;
+
+    // direct session
+    DirectSession::DirectSession(const SessionOptions& options, const DeviceMgr* device_mgr,
+            DirectSessionFactory* factory)
+        :options_(options),
+        device_mgr_(device_mgr),
+        factory_(factory){
+            // build thread pool
+            const int thread_pool_size =
+                options_.config.session_inter_op_thread_pool_size();
+            for(int i=0;i<thread_pool_size;i++){
+            }
+
+            session_handle_ =
+                strings::StrCat("direct", strings::FpToString(random::New64()));
+            int devices_added = 0;
+
+            if (options.config.log_device_placement()) {
+                const string mapping_str = device_mgr_->DeviceMappingString();
+                if (mapping_str.empty()) {
+                    printf("Device mapping: no known devices.\n");
+                } else {
+                    printf("Device mapping:\n%s", mapping_str.c_str());
+                }
+                string msg = strings::StrCat("Device mapping:\n", mapping_str);
+                if (!logging::LogToListeners(msg)) {
+                    LOG(INFO) << msg;
+                }
+            }
+
+            for (auto d : device_mgr_->ListDevices()) {
+                devices_.push_back(d);
+                device_set_.AddDevice(d);
+                d->op_segment()->AddHold(session_handle_);
+
+                // The first device added is special: it is the 'client device' (a
+                // CPU device) from which we feed and fetch Tensors.
+                if (devices_added == 0) {
+                    device_set_.set_client_device(d);
+                }
+                ++devices_added;
+            }
+
+        }
+
+    // several run methods
+    Status DirectSession::Run(const NamedTensorList& inputs,
+            const std::vector<string>& output_names,
+            const std::vector<string>& target_nodes,
+            std::vector<Tensor>* outputs) {
+        RunMetadata run_metadata;
+        return Run(RunOptions(), inputs, output_names, target_nodes, outputs,
+                &run_metadata);
+    }
+
+    Status DirectSession::Run(const RunOptions& run_options,
+            const NamedTensorList& inputs,
+            const std::vector<string>& output_names,
+            const std::vector<string>& target_nodes,
+            std::vector<Tensor>* outputs,
+            RunMetadata* run_metadata){
+        return Run(RunOptions(), inputs, output_names, target_nodes, outputs,
+                run_metadata, thread::ThreadPoolOptions());
+    }
+
+    Status DirectSession::Run(
+            const RunOptions& run_options,
+            const NamedTensorList& inputs, const std::vector<string>& output_names,
+            const std::vector<string>& target_nodes, std::vector<Tensor>* outputs,
+            RunMetadata* run_metadata,
+            const thread::ThreadPoolOptions& threadpool_options){
+    }
+
+    Status Create(const GraphDef& graph){
+        return Create(GraphDef(graph));
+    }
+    Status Create(GraphDef&& graph){
+        // lock and create when graph is not empty
+        TF_RETURN_IF_ERROR(init_error_);
+        if (graph.node_size() > 0) {
+            mutex_lock l(graph_state_lock_);
+            if (graph_created_) {
+                return errors::AlreadyExists(
+                        "A Graph has already been created for this session.");
+            }
+            return ExtendLocked(std::move(graph));
+        }
+        return Status::OK();
+        // create original graph(graph_execution_state)
+    }
+
+    Status ExtendLocked(GraphDef graph){
+        if (finalized_) {
+            return errors::FailedPrecondition("Session has been finalized.");
+        }
+        if(!execution_state_){
+            // first create
+            GraphExecutionStateOptions options;
+            options.device_set = &device_set_;
+            options.session_options = &options_;
+            options.session_handle = session_handle_;
+            TF_RETURN_IF_ERROR(GraphExecutionState::MakeForBaseGraph(
+                        std::move(graph), options, &execution_state_));
+            graph_created_ = true;
+        }
+    }
+
+    Status DirectSession::Reset(
+            const std::vector<string>& containers) {
+        device_mgr_->ClearContainers(containers);
+        return Status::OK();
+    }
 }

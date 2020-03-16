@@ -7,11 +7,14 @@
 #include "dlxnet/core/common_runtime/device_mgr.h"
 #include "dlxnet/core/common_runtime/executor.h"
 #include "dlxnet/core/common_runtime/graph_constructor.h"
+#include "dlxnet/core/common_runtime/graph_execution_state.h"
 #include "dlxnet/core/lib/status.h"
 #include "dlxnet/core/lib/stringpiece.h"
 #include "dlxnet/core/lib/core/threadpool.h"
 #include "dlxnet/core/platform/mutex.h"
 #include "dlxnet/core/graph/graph.h"
+#include "dlxnet/core/framework/function.h"
+#include "dlxnet/core/framework/session_state.h"
 
 namespace dlxnet{
     class DirectSessionFactory;
