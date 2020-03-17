@@ -59,13 +59,19 @@ set(ABSL_LIBRARIES absl::base absl::synchronization
     absl::hash absl::hashtablez_sampler Threads::Threads
     absl::flat_hash_map absl::debugging)
 
+# nsync
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/third_party/nsync)
+link_directories(${CMAKE_CURRENT_BINARY_DIR}/third_party/nsync)
 set(NSYNC_LIBRARIES -lnsync -lnsync_cpp)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/third_party/nsync/public)
+
+# double-conversion
+
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/third_party/double-conversion)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/third_party/double-conversion)
+link_directories(${CMAKE_CURRENT_BINARY_DIR}/third_party/double-conversion/)
 
 # in all
-# message(${GTEST_LIBRARIES})
-set(GTEST_LIBRARIES /usr/lib/libgtest.so)
-set(GTEST_MAIN_LIBRARIES /usr/lib/libgtest_main.so)
 set(DLXNET_DEPEND -pthread ${Protobuf_LIBRARIES}
     ${ABSL_LIBRARIES} ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES}
     -ldl -ldouble-conversion ${NSYNC_LIBRARIES})
