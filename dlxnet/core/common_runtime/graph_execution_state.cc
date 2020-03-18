@@ -1,7 +1,7 @@
 #include <memory>
 
 #include "dlxnet/core/common_runtime/graph_execution_state.h"
-#include "dlxnet/core/common_runtime/graph_constructor.h"
+#include "dlxnet/core/graph/graph_constructor.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/framework/op.h"
 
@@ -31,6 +31,11 @@ namespace dlxnet{
             std::unique_ptr<GraphExecutionState>* out_state){
     }
 
-    GraphExecutionState::GraphExecutionState(){
-    }
+    GraphExecutionState::GraphExecutionState(std::unique_ptr<GraphDef>&& graph_def,
+            const GraphExecutionStateOptions& options)
+        : original_graph_def_(graph_def),
+        device_set_(options.device_set),
+        session_options_(options.session_options),
+        session_handle_(options.session_handle),
+        graph_(nullptr) {}
 }

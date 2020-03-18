@@ -38,10 +38,13 @@ namespace dlxnet{
             static Status MakeForPrunedGraph(
                     GraphDef&& graph_def, const GraphExecutionStateOptions& options,
                     std::unique_ptr<GraphExecutionState>* out_state);
+            Status InitBaseGraph(std::unique_ptr<Graph>&& graph);
         private:
             GraphExecutionState(std::unique_ptr<GraphDef>&& graph_def,
                     const GraphExecutionStateOptions& options);
 
+
+            const std::unique_ptr<GraphDef> original_graph_def_;
 
             // The dataflow graph owned by this object.
             Graph* graph_;

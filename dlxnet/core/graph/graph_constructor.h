@@ -32,7 +32,6 @@ namespace dlxnet{
     Status ConvertGraphDefToGraph(const GraphConstructorOptions& opts,
             GraphDef&& gdef, Graph* g);
 
-    Graph
 }
 
 
