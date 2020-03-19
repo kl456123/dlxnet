@@ -122,6 +122,7 @@ namespace dlxnet{
             // Device structures.
             const std::unique_ptr<const DeviceMgr> device_mgr_;
             std::vector<Device*> devices_;  // not owned
+            DeviceSet device_set_;
             // Unique session identifier.
             string session_handle_;
 

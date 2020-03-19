@@ -2,10 +2,13 @@
 #define DLXNET_CORE_GRAPH_GRAPH_H_
 #include <vector>
 
-#include "dlxnet/core/platform/types.h"
+#include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/lib/gtl/iterator_range.h"
 #include "dlxnet/core/lib/status.h"
 #include "dlxnet/core/framework/graph.pb.h"
+#include "dlxnet/core/framework/node_def_util.h"
+#include "dlxnet/core/graph/edgeset.h"
+#include "dlxnet/core/framework/op.h"
 
 namespace dlxnet{
     class Node;
@@ -13,10 +16,15 @@ namespace dlxnet{
     class Graph;
     class GraphDef;
 
+    // iterator
+    class NodeIter;
+    class NeighborIter;
+
     class Node{
         public:
             string DebugString() const;
             const string& name()const;
+            int id() const { return id_; }
             void set_name(string name);
             const string& type_string()const;
             // This gives the device the runtime has assigned this node to.  If
@@ -69,7 +77,7 @@ namespace dlxnet{
             // attr helper functions
             template <typename T>
                 void AddAttr(const string& name, const T& val) {
-                    SetAttrValue(val, AddAttrHelper(name));
+                    // SetAttrValue(val, AddAttrHelper(name));
                     UpdateProperties();
                 }
 
@@ -92,10 +100,14 @@ namespace dlxnet{
             bool IsSink() const { return id() == 1; }
 
         private:
-            class enum NodeClass{
-                NC_SOURCE;
-                NC_SINK;
-                NC_OTHER;
+            // Called after an attr has changed. Decides whether we need to update some
+            // property of the node (stored in props_).
+            void UpdateProperties();
+
+            enum class NodeClass{
+                NC_SOURCE,
+                NC_SINK,
+                NC_OTHER
             };
             friend class Graph;
             Node();
@@ -150,7 +162,11 @@ namespace dlxnet{
     // Allows for iteration of the edges of a Graph, by iterating the underlying
     // Graph.edges_ vector while skipping over null entries.
     class GraphEdgesIterable{
+        private:
+            const std::vector<Edge*>& edges_;
         public:
+            explicit GraphEdgesIterable(const std::vector<Edge*>& edges)
+                : edges_(edges) {}
             typedef Edge* value_type;
             class const_iterator{
                 private:
@@ -170,7 +186,7 @@ namespace dlxnet{
                             skip_empty();
                         }
                     const_iterator& operator++(){
-                        ++iter;
+                        ++iter_;
                         skip_empty();
                         return *this;
                     }
@@ -233,6 +249,11 @@ namespace dlxnet{
             // Access to the set of all edges.  Example usage:
             //   for (const Edge* e : graph.edges()) { ... }
             GraphEdgesIterable edges() const { return GraphEdgesIterable(edges_); }
+            // Returns the node associated with an id, or nullptr if no node
+            // with that id (the node with that id was removed and the id has
+            // not yet been re-used). *this owns the returned instance.
+            // REQUIRES: 0 <= id < num_node_ids().
+            Node* FindNodeId(int id) const { return nodes_[id]; }
 
             // The pre-defined nodes.
             enum { kSourceId = 0, kSinkId = 1 };
@@ -247,7 +268,7 @@ namespace dlxnet{
             std::unordered_map<string, Node*> BuildNodeNameIndex() const;
 
         private:
-            std::vector<Edge*> edges;
+            std::vector<Edge*> edges_;
             // Map from node ids to allocated nodes.  nodes_[id] may be nullptr if
             // the node with that id was removed from the graph.
             std::vector<Node*> nodes_;
@@ -255,6 +276,12 @@ namespace dlxnet{
             int num_edges_ = 0;
             // For generating unique names.
             int name_counter_ = 0;
+
+            // Number of nodes alive.
+            int64 num_nodes_ = 0;
+
+            // Registry of all known ops, including functions.
+            OpRegistry ops_;
 
             // In most graphs, the number of unique values used for the
             // Node::assigned_device_name() property is quite small.  If the graph is
@@ -280,6 +307,16 @@ namespace dlxnet{
             // Maps unique device names to indices within device_names_[i].
             std::unordered_map<string, int> device_names_map_;
             TF_DISALLOW_COPY_AND_ASSIGN(Graph);
+    };
+
+    class NodeIter{
+        public:
+            NodeIter(const Graph* graph, int id);
+    };
+
+    class NeighborIter{
+        public:
+            NeighborIter();
     };
 
 

@@ -175,10 +175,10 @@ namespace dlxnet{
             const thread::ThreadPoolOptions& threadpool_options){
     }
 
-    Status Create(const GraphDef& graph){
+    Status DirectSession::Create(const GraphDef& graph){
         return Create(GraphDef(graph));
     }
-    Status Create(GraphDef&& graph){
+    Status DirectSession::Create(GraphDef&& graph){
         // lock and create when graph is not empty
         TF_RETURN_IF_ERROR(init_error_);
         if (graph.node_size() > 0) {
@@ -193,7 +193,7 @@ namespace dlxnet{
         // create original graph(graph_execution_state)
     }
 
-    Status ExtendLocked(GraphDef graph){
+    Status DirectSession::ExtendLocked(GraphDef graph){
         if (finalized_) {
             return errors::FailedPrecondition("Session has been finalized.");
         }
