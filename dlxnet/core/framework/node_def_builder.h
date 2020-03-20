@@ -28,8 +28,8 @@ namespace dlxnet{
 
             Status Finalize(NodeDef* node_def);
 
-            const string& node_name()const {return ;}
-            const opDef& op_def()const{return *op_def_;}
+            const string& node_name()const {return node_def_.name();}
+            const OpDef& op_def()const{return *op_def_;}
 
         private:
             // init to construct

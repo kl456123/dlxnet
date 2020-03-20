@@ -25,6 +25,8 @@ namespace dlxnet{
         // If true, GraphConstructor will add attributes with their default
         // value to the Node when they are missing from the NodeDef.
         bool add_default_attributes = true;
+
+        bool validate_shape = true;
     };
     // construct from empty graph(sink and source node)
     Status ConvertGraphDefToGraph(const GraphConstructorOptions& opts,

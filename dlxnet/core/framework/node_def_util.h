@@ -3,18 +3,24 @@
 #include "dlxnet/core/platform/protobuf.h"
 #include "dlxnet/core/framework/op_def.pb.h"
 #include "dlxnet/core/framework/node_def.pb.h"
+#include "dlxnet/core/lib/stringpiece.h"
+#include "dlxnet/core/lib/status.h"
+
 
 
 namespace dlxnet{
+    class Node;
+    class NodeDef;
+    class OpDef;
     // manage node attrs
     class AttrSlice;
 
     // summarize node and node_def
 
-    string SummarizeNode();
-    string SummarizeNodeDef();
+    string SummarizeNode(const Node& node);
+    string SummarizeNodeDef(const NodeDef& node_def);
 
-    string SummarizeAttrs();
+    string SummarizeAttrs(const NodeDef& node_def);
 
     typedef protobuf::Map<string, AttrValue> AttrValueMap;
 
@@ -36,9 +42,16 @@ namespace dlxnet{
 
     };
 
-    void AddDefaultToNodeDef(const OpDef& op_def, NodeDef& node_def);
+    void AddDefaultsToNodeDef(const OpDef& op_def, NodeDef* node_def);
 
     void AddNodeAttr(StringPiece name, const AttrValue& value, NodeDef* node_def);
+
+    // Validates that the NodeDef:
+    // * Defines all expected attrs from the OpDef.
+    // * All attrs satisfies constraints from the OpDef.
+    // * Has a signature matching SignatureForNode().
+    // etc.
+    Status ValidateNodeDef(const NodeDef& node_def, const OpDef& op_def);
 
 
 }

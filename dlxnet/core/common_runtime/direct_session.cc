@@ -4,6 +4,9 @@
 #include "dlxnet/core/common_runtime/session_factory.h"
 #include "dlxnet/core/common_runtime/device_factory.h"
 #include "dlxnet/core/common_runtime/device_mgr.h"
+#include "dlxnet/core/lib/random/random.h"
+#include "dlxnet/core/framework/logging.h"
+#include "dlxnet/core/platform/threadpool_options.h"
 
 
 namespace dlxnet{
@@ -135,7 +138,7 @@ namespace dlxnet{
             for (auto d : device_mgr_->ListDevices()) {
                 devices_.push_back(d);
                 device_set_.AddDevice(d);
-                d->op_segment()->AddHold(session_handle_);
+                // d->op_segment()->AddHold(session_handle_);
 
                 // The first device added is special: it is the 'client device' (a
                 // CPU device) from which we feed and fetch Tensors.

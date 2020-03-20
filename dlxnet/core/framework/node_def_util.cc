@@ -8,7 +8,7 @@ namespace dlxnet{
     string AttrSlice::DebugString()const{
     }
 
-    void AddDefaultToNodeDef(const OpDef& op_def, NodeDef* node_def){
+    void AddDefaultsToNodeDef(const OpDef& op_def, NodeDef* node_def){
         for(const auto& attr_def: op_def.attr()){
             AttrSlice attrs(*node_def);
             if(attr_def.has_default_value()&&!attrs.Find(attr_def.name())){

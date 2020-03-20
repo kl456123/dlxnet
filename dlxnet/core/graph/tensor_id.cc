@@ -13,6 +13,7 @@ namespace dlxnet{
             mul*=10;
             p--;
         }
+        TensorId id;
         // check ':' or not
         if(p>base&& *p==':'&&mul>1){
             id.first = string(base, p-base);

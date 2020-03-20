@@ -7,6 +7,7 @@
 #include "dlxnet/core/common_runtime/device_mgr.h"
 #include "dlxnet/core/common_runtime/executor.h"
 #include "dlxnet/core/common_runtime/graph_execution_state.h"
+#include "dlxnet/core/common_runtime/build_graph_options.h"// used for build subgraph
 #include "dlxnet/core/lib/status.h"
 #include "dlxnet/core/lib/stringpiece.h"
 #include "dlxnet/core/lib/core/threadpool.h"

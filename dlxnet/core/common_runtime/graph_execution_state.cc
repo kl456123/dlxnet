@@ -33,7 +33,7 @@ namespace dlxnet{
 
     GraphExecutionState::GraphExecutionState(std::unique_ptr<GraphDef>&& graph_def,
             const GraphExecutionStateOptions& options)
-        : original_graph_def_(graph_def),
+        : original_graph_def_(std::move(graph_def)),
         device_set_(options.device_set),
         session_options_(options.session_options),
         session_handle_(options.session_handle),

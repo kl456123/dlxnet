@@ -3,6 +3,7 @@
 
 #include "dlxnet/core/platform/types.h"
 #include "dlxnet/core/lib/strcat.h"
+#include "dlxnet/core/lib/hash/hash.h"
 
 namespace dlxnet{
     struct TensorId{

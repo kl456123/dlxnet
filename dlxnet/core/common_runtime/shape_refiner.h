@@ -17,7 +17,7 @@ namespace dlxnet{
 
     class ExtendedInferenceContext{
         public:
-            ExtendedInferenceContext(std::unique_ptr<shape_inference::InferenceContext>ic, Node* node)
+            ExtendedInferenceContext(std::unique_ptr<shape_inference::InferenceContext>ic, const Node* node)
                 :inference_context_(std::move(ic)), op_(node->name()){
                     input_types_.reserve(node->num_inputs());
                     for (int i = 0; i < node->num_inputs(); i++) {

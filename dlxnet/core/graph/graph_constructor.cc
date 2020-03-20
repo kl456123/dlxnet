@@ -1,11 +1,14 @@
 #include "dlxnet/core/graph/graph_constructor.h"
 #include "dlxnet/core/graph/tensor_id.h"
+#include "dlxnet/core/graph/graph_constructor.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/framework/op.h"
 #include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/lib/status.h"
 #include "dlxnet/core/platform/logging.h"
-
+#include "dlxnet/core/lib/gtl/flatmap.h"
+#include "dlxnet/core/common_runtime/shape_refiner.h"
+#include "dlxnet/core/framework/node_def_util.h"
 
 
 namespace dlxnet{
@@ -15,14 +18,17 @@ namespace dlxnet{
             public:
                 GraphConstructor(const GraphConstructorOptions& opts,
                         GraphDef&& gdef, Graph* g, ShapeRefiner* refiner)
-                    :graph_def_(gdef){
+                    :graph_def_(gdef),
+                    g_(g),
+                    refiner_(refiner),
+                    opts_(opts){
                     }
 
                 static Status Construct(const GraphConstructorOptions& opts,
                         GraphDef&& gdef, Graph* g, ShapeRefiner* refiner);
                 Status TryImport() {
                     TF_RETURN_IF_ERROR(EnsureNoNameCollisions());
-                    TF_RETURN_IF_ERROR(ValidateInputMapAndControlDependencies());
+                    // TF_RETURN_IF_ERROR(ValidateInputMapAndControlDependencies());
                     TF_RETURN_IF_ERROR(BuildNodeIndex());
                     TF_RETURN_IF_ERROR(InitFromEdges());
 
@@ -30,24 +36,26 @@ namespace dlxnet{
                     // graph, so `get_node_def()` is no longer usable once it is called.
                     TF_RETURN_IF_ERROR(Convert());
 
-                    TF_RETURN_IF_ERROR(AddBackEdges());
-                    TF_RETURN_IF_ERROR(UpdateVersionDef());
+                    // TF_RETURN_IF_ERROR(AddBackEdges());
+                    // TF_RETURN_IF_ERROR(UpdateVersionDef());
                     TF_RETURN_IF_ERROR(PopulateReturnTensors());
                     TF_RETURN_IF_ERROR(PopulateReturnNodes());
                     TF_RETURN_IF_ERROR(PopulateMissingUnusedInputMapKeys());
-                    UpdateUniquifiedColocationNames();
-                    FixupSourceAndSinkEdges(g_);
+                    // UpdateUniquifiedColocationNames();
+                    FixupSourceAndSinkEdges();
                     return Status::OK();
                 }
                 void Undo();
             private:
+                void FixupSourceAndSinkEdges();
+
                 Status EnsureNoNameCollisions();
                 Status ValidateInputMapAndControlDependencies();
                 Status BuildNodeIndex();
                 Status InitFromEdges();
                 Status Convert();
-                Status AddBackEdges();
-                Status UpdateVersionDef();
+                // Status AddBackEdges();
+                // Status UpdateVersionDef();
                 Status PopulateReturnTensors();
                 Status PopulateReturnNodes();
                 Status PopulateMissingUnusedInputMapKeys();
@@ -94,7 +102,7 @@ namespace dlxnet{
                 }
 
                 // From constructor
-                const Options opts_;
+                const GraphConstructorOptions opts_;
                 Graph* g_;
                 ShapeRefiner* refiner_;
                 struct NodeInfo{
@@ -119,6 +127,14 @@ namespace dlxnet{
                 // Mapping from node name to the existing node in g_.
                 gtl::FlatMap<StringPiece, Node*, StringPieceHasher> existing_nodes_;
 
+                struct InputInfo{
+                    explicit InputInfo(const string& node_name, Node* n, int i)
+                        :name(node_name), node(n), index(i){}
+                    string name;
+                    Node* node;
+                    int index;
+                };
+
                 // Mapping between index within node_defs_ and the index within node_defs_ of
                 // all nodes it outputs to.
                 std::vector<gtl::InlinedVector<int, 4>> outputs_;
@@ -128,7 +144,7 @@ namespace dlxnet{
 
         Status GraphConstructor::Construct(const GraphConstructorOptions& opts,
                 GraphDef&& gdef, Graph* g, ShapeRefiner* refiner){
-            GraphConstructor c(opts, std::move(graph_def), g, refiner);
+            GraphConstructor c(opts, std::move(gdef), g, refiner);
             const Status s = c.TryImport();
             if (!s.ok()) c.Undo();
             return s;
@@ -158,12 +174,15 @@ namespace dlxnet{
         Status GraphConstructor::InitFromEdges() {
             // generate pending_count_ and outputs_ for each node
             // Parse the inputs for each node.
+            const int num_nodes = node_def_count();
+            pending_count_.reserve(num_nodes);
+            outputs_.resize(num_nodes);
             for (int n = 0; n < num_nodes; ++n) {
-                const NodeDef& node_def = get_node_def(i);
+                const NodeDef& node_def = get_node_def(n);
                 int pending_count = node_def.input_size();
                 for (int i = 0; i < node_def.input_size(); ++i){
                     StringPiece input_name = node_def.input(i);
-                    TensorId id(ParseTensorName(input_name));
+                    TensorId id(ParseTensorName(string(input_name)));
 
                     auto iter = gdef_nodes_.find(id.first);
                     if (iter == gdef_nodes_.end()) {
@@ -176,7 +195,7 @@ namespace dlxnet{
                 if (pending_count == 0) {
                     ready_.insert(n);
                 }
-                pending_count_.append(pending_count);
+                pending_count_.push_back(pending_count);
             }
             return Status::OK();
         }
@@ -184,24 +203,25 @@ namespace dlxnet{
         Status GraphConstructor::ValidateShape(Node* node) {
             if (!opts_.validate_shape) return Status::OK();
             TF_RETURN_IF_ERROR(refiner_->AddNode(node));
-            auto* ic = refiner_->GetContext(node);
-            const char* kAttrName = "_output_shapes";
+            // for some specifial output shape attr
+            // auto* ic = refiner_->GetContext(node);
+            // const char* kAttrName = "_output_shapes";
             // for each output node, set shape
-            for (int i = 0; i < node->num_outputs(); ++i){
-                Status s = ic->MakeShapeFromShapeProto(p, &h);
-                if (!s.ok()) {
-                    return errors::InvalidArgument("Node '", node->name(), " has an invalid ",
-                            kAttrName, " attribute (shape #", i,
-                            " error:'", s.error_message(), "'");
-                }
-                s = refiner_->SetShape(node, i, h);
-                if(!s.ok()){
-                    return errors::InvalidArgument(
-                            "Node '", node->name(), "' has an ", kAttrName,
-                            " attribute inconsistent with the GraphDef for output #", i, ": ",
-                            s.error_message());
-                }
-            }
+            // for (int i = 0; i < node->num_outputs(); ++i){
+            // Status s = ic->MakeShapeFromShapeProto(p, &h);
+            // if (!s.ok()) {
+            // return errors::InvalidArgument("Node '", node->name(), " has an invalid ",
+            // kAttrName, " attribute (shape #", i,
+            // " error:'", s.error_message(), "'");
+            // }
+            // s = refiner_->SetShape(node, i, h);
+            // if(!s.ok()){
+            // return errors::InvalidArgument(
+            // "Node '", node->name(), "' has an ", kAttrName,
+            // " attribute inconsistent with the GraphDef for output #", i, ": ",
+            // s.error_message());
+            // }
+            // }
             return Status::OK();
         }
 
@@ -218,7 +238,7 @@ namespace dlxnet{
 
                 // generate inputs
                 for (int i = 0; i < node_def.input_size(); ++i){
-                    TensorId tensor_id = ParseTensorName();
+                    TensorId tensor_id = ParseTensorName(node_def.input(i));
                     Node* src_node;
                     int src_index;
                     // Locate input in newly-imported nodes
@@ -257,6 +277,7 @@ namespace dlxnet{
                 if (opts_.validate_nodes) {
                     TF_RETURN_IF_ERROR(ValidateNodeDef(node_def, *op_def));
                 }
+                Node* node;
 
                 // final build node
                 TF_RETURN_IF_ERROR(MakeNode(std::move(node_def), &node));
@@ -271,7 +292,7 @@ namespace dlxnet{
                 TF_RETURN_IF_ERROR(ValidateShape(node));
 
                 // Update pending_count_ for outputs.
-                UpdatePendingCountAndReady();
+                UpdatePendingCountAndReady(o);
             }
 
             if (processed < node_def_count()) {
@@ -283,7 +304,7 @@ namespace dlxnet{
                             << " WITH PENDING COUNT = " << pending_count_[i];
                     }
                 }
-                PrintCycles();
+                // PrintCycles();
                 return errors::InvalidArgument(node_def_count() - processed,
                         " nodes in a cycle");
             }
@@ -327,7 +348,14 @@ namespace dlxnet{
                 }
             }
         }
-    }
+        void GraphConstructor::Undo(){}
+        void GraphConstructor::FixupSourceAndSinkEdges(){}
+
+        Status GraphConstructor::EnsureNoNameCollisions(){return Status::OK();}
+        Status GraphConstructor::PopulateReturnTensors(){return Status::OK();}
+        Status GraphConstructor::PopulateReturnNodes(){return Status::OK();}
+        Status GraphConstructor::PopulateMissingUnusedInputMapKeys(){return Status::OK();}
+    } // namespace
 
 
     Status ConvertGraphDefToGraph(const GraphConstructorOptions& opts,
