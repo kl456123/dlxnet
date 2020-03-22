@@ -39,10 +39,28 @@ namespace dlxnet{
     }
 
     Session* NewSession(const SessionOptions& options){
+        Session* out_session;
+        Status s = NewSession(options, &out_session);
+        if (!s.ok()) {
+            LOG(ERROR) << "Failed to create session: " << s;
+            return nullptr;
+        }
+        return out_session;
     }
 
     Status NewSession(const SessionOptions& options, Session** out_session) {
-        return Status::OK();
+        SessionFactory* factory;
+        Status s = SessionFactory::GetFactory(options, &factory);
+        if(!s.ok()){
+            *out_session = nullptr;
+            LOG(ERROR)<<s;
+            return s;
+        }
+        s = factory->NewSession(options, out_session);
+        if(!s.ok()){
+            *out_session = nullptr;
+        }
+        return s;
     }
 
     Status Reset(const SessionOptions& options,

@@ -1,6 +1,8 @@
 #include <memory>
 
 #include "dlxnet/core/common_runtime/graph_execution_state.h"
+#include "dlxnet/core/common_runtime/placer.h"
+#include "dlxnet/core/common_runtime/optimization_registry.h"
 #include "dlxnet/core/graph/graph_constructor.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/framework/op.h"
@@ -38,4 +40,15 @@ namespace dlxnet{
         session_options_(options.session_options),
         session_handle_(options.session_handle),
         graph_(nullptr) {}
+
+    Status GraphExecutionState::InitBaseGraph(std::unique_ptr<Graph>&& graph){
+        // pre optimize
+        // placement
+        Placer placer;
+        TF_RETURN_IF_ERROR(placer.Run());
+        // post optimize
+
+        graph_ = graph.release();
+        return Status::OK();
+    }
 }

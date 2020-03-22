@@ -22,6 +22,10 @@ namespace dlxnet{
             const DeviceAttributes& attributes() const override {
                 return device_attributes_;
             }
+
+            // Full name of this device (see top comment).
+            const string& name() const override { return device_attributes_.name(); }
+
             // Parsed name of this device
             const DeviceNameUtils::ParsedName& parsed_name() const {
                 return parsed_name_;

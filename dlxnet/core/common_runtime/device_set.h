@@ -25,6 +25,13 @@ namespace dlxnet{
                 DCHECK(client_device_ == nullptr);
                 client_device_ = device;
             }
+
+            void FindMatchingDevices(const DeviceNameUtils::ParsedName& spec,
+                    std::vector<Device*>* devices) const;
+            Device* FindDeviceByName(const string& name) const;
+            static int DeviceTypeOrder(const DeviceType& d);
+            std::vector<DeviceType> PrioritizedDeviceTypeList() const;
+
         private:
             // Not owned.
             std::vector<Device*> devices_;

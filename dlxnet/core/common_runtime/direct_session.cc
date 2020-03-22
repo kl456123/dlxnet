@@ -196,6 +196,21 @@ namespace dlxnet{
         // create original graph(graph_execution_state)
     }
 
+    Status DirectSession::Finalize(){
+        // after finalization, graph cannot be changed,
+        // and discard execution state
+        mutex_lock l(graph_state_lock_);
+        if (finalized_) {
+            return errors::FailedPrecondition("Session already finalized.");
+        }
+        if (!graph_created_) {
+            return errors::FailedPrecondition("Session not yet created.");
+        }
+        execution_state_.reset();
+        finalized_ = true;
+        return Status::OK();
+    }
+
     Status DirectSession::ExtendLocked(GraphDef graph){
         if (finalized_) {
             return errors::FailedPrecondition("Session has been finalized.");
@@ -216,5 +231,41 @@ namespace dlxnet{
             const std::vector<string>& containers) {
         device_mgr_->ClearContainers(containers);
         return Status::OK();
+    }
+
+    Status DirectSession::Close(){
+        // deregister from factory_
+        {
+            mutex_lock l(closed_lock_);
+            if (closed_) return Status::OK();
+            closed_ = true;
+        }
+        if (factory_ != nullptr) factory_->Deregister(this);
+        return Status::OK();
+    }
+
+    Status DirectSession::ListDevices(
+            std::vector<DeviceAttributes>* response){
+        // return attributes
+        response->clear();
+        response->reserve(devices_.size());
+        for (Device* d : devices_) {
+            const DeviceAttributes& attrs = d->attributes();
+            response->emplace_back(attrs);
+        }
+        return Status::OK();
+    }
+
+    Status DirectSession::Extend(const GraphDef& graph) {
+        return Extend(GraphDef(graph));
+    }
+
+    Status DirectSession::Extend(GraphDef&& graph) {
+        TF_RETURN_IF_ERROR(CheckNotClosed());
+        mutex_lock l(graph_state_lock_);
+        return ExtendLocked(std::move(graph));
+    }
+
+    DirectSession::~DirectSession(){
     }
 }

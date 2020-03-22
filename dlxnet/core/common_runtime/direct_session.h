@@ -64,6 +64,8 @@ namespace dlxnet{
                 *output = device_mgr_.get();
                 return Status::OK();
             }
+
+            Status Finalize()override;
             const SessionOptions& options() const { return options_; }
 
         private:

@@ -8,8 +8,10 @@
 #include "dlxnet/core/framework/tensor.h"
 #include "dlxnet/core/framework/node_def.pb.h"
 #include "dlxnet/core/framework/op_def.pb.h"
-#include "dlxnet/core/platform/types.h"
 #include "dlxnet/core/framework/op.h"
+#include "dlxnet/core/framework/node_def_util.h"
+#include "dlxnet/core/platform/types.h"
+
 
 
 namespace dlxnet{
@@ -47,6 +49,7 @@ namespace dlxnet{
         class Shape{
             private:
                 Shape(const std::vector<DimensionHandle>& dims);
+                Shape();
                 ~Shape() {}
 
                 const int32 rank_;
@@ -73,6 +76,7 @@ namespace dlxnet{
 
         class InferenceContext{
             public:
+                static constexpr int32 kUnknownRank = -1;
                 InferenceContext(const NodeDef& node_def,
                         const OpDef& op_def);
                 ~InferenceContext();
@@ -91,8 +95,18 @@ namespace dlxnet{
                 // Describes the whole context, for debugging purposes.
                 string DebugString() const;
             private:
+                // Shared initialization across the two constructors.  Remove
+                // once we get rid of one of them.
+                void PreInputInit(const OpDef& op_def);
                 std::vector<ShapeHandle> inputs_;
                 std::vector<ShapeHandle> outputs_;
+                NameRangeMap input_name_map_;
+                NameRangeMap output_name_map_;
+
+                // An error set during construction. TODO(cwhipkey): remove when test
+                // constructor is removed.
+                Status construction_status_;
+
                 const NodeDef& node_def_;
                 TF_DISALLOW_COPY_AND_ASSIGN(InferenceContext);
         };
@@ -101,6 +115,9 @@ namespace dlxnet{
 
         inline Shape::Shape(const std::vector<DimensionHandle>& dims)
             : rank_(dims.size()), dims_(dims) {}
+        // unknown at present
+        inline Shape::Shape()
+            : rank_(InferenceContext::kUnknownRank){}
 
         inline Dimension::Dimension(int64 value) : value_(value) {
             DCHECK(value >= 0)

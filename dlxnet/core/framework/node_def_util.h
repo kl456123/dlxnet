@@ -3,8 +3,10 @@
 #include "dlxnet/core/platform/protobuf.h"
 #include "dlxnet/core/framework/op_def.pb.h"
 #include "dlxnet/core/framework/node_def.pb.h"
+#include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/lib/stringpiece.h"
 #include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/gtl/flatmap.h"
 
 
 
@@ -21,6 +23,7 @@ namespace dlxnet{
     string SummarizeNodeDef(const NodeDef& node_def);
 
     string SummarizeAttrs(const NodeDef& node_def);
+    string SummarizeAttrsHelper(AttrSlice attrs, StringPiece device);
 
     typedef protobuf::Map<string, AttrValue> AttrValueMap;
 
@@ -29,7 +32,11 @@ namespace dlxnet{
         public:
             AttrSlice(const NodeDef& node_def);
 
+            // two versions function of find
             const AttrValue* Find(StringPiece attr_name)const;
+            // Returns the attr_value for attr_name if found. Otherwise, returns a
+            // NotFound status.
+            Status Find(StringPiece attr_name, const AttrValue** attr_value) const;
 
             int size()const {return attrs_->size();}
             string DebugString()const;
@@ -52,6 +59,35 @@ namespace dlxnet{
     // * Has a signature matching SignatureForNode().
     // etc.
     Status ValidateNodeDef(const NodeDef& node_def, const OpDef& op_def);
+
+    // Computes the input and output types for a specific node.
+    // REQUIRES: ValidateOpDef(op_def).ok()
+    Status InOutTypesForNode(const NodeDef& node_def, const OpDef& op_def,
+            DataTypeVector* inputs, DataTypeVector* outputs);
+
+    // Computes the input types for a specific node.
+    // REQUIRES: ValidateOpDef(op_def).ok()
+    Status InputTypesForNode(const NodeDef& node_def, const OpDef& op_def,
+            DataTypeVector* inputs);
+
+    // Computes the output type for a specific node.
+    // REQUIRES: ValidateOpDef(op_def).ok()
+    Status OutputTypesForNode(const NodeDef& node_def, const OpDef& op_def,
+            DataTypeVector* inputs);
+
+    // both attrslice and node are ok
+    typedef gtl::FlatMap<StringPiece, std::pair<int, int>, hash<StringPiece>>
+        NameRangeMap;
+    Status NameRangesForNode(const AttrSlice& attrs, const OpDef& op_def,
+            NameRangeMap* inputs, NameRangeMap* outputs);
+    Status NameRangesForNode(const Node& node, const OpDef& op_def,
+            NameRangeMap* inputs, NameRangeMap* outputs);
+
+
+    // functions to Get Node Attrs
+    // declarations for all types
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            int32* value);  // type: "int"
 
 
 }

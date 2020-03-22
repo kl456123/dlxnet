@@ -23,5 +23,6 @@ namespace dlxnet{
             id.first = name;
             id.second = 0;
         }
+        return id;
     }
 }

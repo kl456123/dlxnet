@@ -1,6 +1,7 @@
 #ifndef DLXNET_CORE_GRAPH_GRAPH_H_
 #define DLXNET_CORE_GRAPH_GRAPH_H_
 #include <vector>
+#include <memory>
 
 #include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/lib/gtl/iterator_range.h"
@@ -9,6 +10,7 @@
 #include "dlxnet/core/framework/node_def_util.h"
 #include "dlxnet/core/graph/edgeset.h"
 #include "dlxnet/core/framework/op.h"
+#include "dlxnet/core/lib/core/arena.h"
 
 namespace dlxnet{
     class Node;
@@ -19,6 +21,8 @@ namespace dlxnet{
     // iterator
     class NodeIter;
     class NeighborIter;
+
+    struct NodeProperties;
 
     class Node{
         public:
@@ -35,11 +39,11 @@ namespace dlxnet{
             // NodeId->DeviceName map.
             const string& assigned_device_name() const;
             void set_assigned_device_name(const string& device_name);
+            void set_assigned_device_name_index(int index);
             bool has_assigned_device_name() const {
                 return assigned_device_name_index_ > 0;
             }
             int assigned_device_name_index() const { return assigned_device_name_index_; }
-            void set_assigned_device_name_index(int index);
 
             // def() provides the NodeDef the user supplied, but the specifics
             // of this Node may have changed due to placement, optimization, etc.
@@ -104,11 +108,17 @@ namespace dlxnet{
             // property of the node (stored in props_).
             void UpdateProperties();
 
-            enum class NodeClass{
-                NC_SOURCE,
-                NC_SINK,
+            NodeProperties* properties() const { return props_.get(); }
+
+            void Initialize(int id,  std::shared_ptr<NodeProperties> props);
+
+
+            enum NodeClass{
+                NC_UNINITIALIZED,
                 NC_OTHER
             };
+            static NodeClass GetNodeClassForOp(const string& ts);
+
             friend class Graph;
             Node();
             int id_;       // -1 until Initialize() is called
@@ -126,6 +136,11 @@ namespace dlxnet{
             // equivalent methods defined directly on Graph, then we can remove this
             // field and reclaim that memory.
             Graph* graph_;
+
+            // NOTE(skyewm): inheriting from core::RefCounted may have a slight
+            // performance benefit over using shared_ptr, at the cost of manual ref
+            // counting
+            std::shared_ptr<NodeProperties> props_;
 
             TF_DISALLOW_COPY_AND_ASSIGN(Node);
 
@@ -227,6 +242,9 @@ namespace dlxnet{
             // array's size.
             int num_nodes() const { return num_nodes_; }
 
+            // Returns one more than the maximum id assigned to any node.
+            int num_node_ids() const { return nodes_.size(); }
+
             // The number of live nodes in the graph, excluding the Source and Sink nodes.
             int num_op_nodes() const {
                 DCHECK_GE(num_nodes_, 2);
@@ -259,7 +277,7 @@ namespace dlxnet{
             enum { kSourceId = 0, kSinkId = 1 };
             Node* source_node() const { return FindNodeId(kSourceId); }
             Node* sink_node() const { return FindNodeId(kSinkId); }
-            const OpRegistryInterface* op_registry() const { return &ops_; }
+            const OpRegistryInterface* op_registry() const { return ops_; }
             void CheckDeviceNameIndex(int index) {
                 DCHECK_GE(index, 0);
                 DCHECK_LT(index, static_cast<int>(device_names_.size()));
@@ -267,7 +285,30 @@ namespace dlxnet{
             // Builds a node name to node pointer index for all nodes in the graph.
             std::unordered_map<string, Node*> BuildNodeNameIndex() const;
 
+            // device_name for node
+            const string& get_assigned_device_name(const Node& node) const {
+                return device_names_[node.assigned_device_name_index()];
+            }
+
+            void set_assigned_device_name_index(Node* node, int device_name_index) {
+                CheckDeviceNameIndex(device_name_index);
+                node->assigned_device_name_index_ = device_name_index;
+            }
+
+            void set_assigned_device_name(Node* node, const string& device_name) {
+                // TODO(add device name map for efficiency)
+                // node->assigned_device_name_index_ = InternDeviceName(device_name);
+            }
+
         private:
+            // If cost_node is non-null, then cost accounting (in CostModel)
+            // will be associated with that node rather than the new one being
+            // created.
+            //
+            // Ownership of the returned Node is not transferred to caller.
+            Node* AllocateNode(std::shared_ptr<NodeProperties> props);
+            void ReleaseNode(Node* node);
+
             std::vector<Edge*> edges_;
             // Map from node ids to allocated nodes.  nodes_[id] may be nullptr if
             // the node with that id was removed from the graph.
@@ -277,11 +318,15 @@ namespace dlxnet{
             // For generating unique names.
             int name_counter_ = 0;
 
+            // Allocated but free nodes and edges.
+            std::vector<Node*> free_nodes_;
+            std::vector<Edge*> free_edges_;
+
             // Number of nodes alive.
             int64 num_nodes_ = 0;
 
             // Registry of all known ops, including functions.
-            OpRegistry ops_;
+            OpRegistry* ops_;
 
             // In most graphs, the number of unique values used for the
             // Node::assigned_device_name() property is quite small.  If the graph is
@@ -306,20 +351,107 @@ namespace dlxnet{
 
             // Maps unique device names to indices within device_names_[i].
             std::unordered_map<string, int> device_names_map_;
+
+            // Allocator which will give us good locality.
+            core::Arena arena_;
             TF_DISALLOW_COPY_AND_ASSIGN(Graph);
     };
 
-    class NodeIter{
+    class NodeIter : public std::iterator<std::forward_iterator_tag, Node, std::ptrdiff_t,
+    /*Pointer*/ Node*, /*Reference*/ Node*>{
         public:
             NodeIter(const Graph* graph, int id);
+            bool operator==(const NodeIter& rhs) const;
+            bool operator!=(const NodeIter& rhs) const;
+            void operator++();
+            reference operator*() const;
+            pointer operator->() const;
+
+        private:
+            // Invariant: id_ == graph_->num_node_ids() || graph_->FindId(id_) != nullptr
+            const Graph* graph_;
+            int id_;
     };
 
-    class NeighborIter{
-        public:
-            NeighborIter();
-    };
+    // Iterator for stepping through the neighbors of a node.
+    class NeighborIter
+        : public std::iterator<std::forward_iterator_tag, Node, std::ptrdiff_t,
+        /*Pointer*/ Node*, /*Reference*/ Node*> {
+            public:
+                NeighborIter(EdgeSet::const_iterator iter, bool incoming);
+                bool operator==(const NeighborIter& rhs) const;
+                bool operator!=(const NeighborIter& rhs) const;
+                void operator++();
+                reference operator*() const;
+                pointer operator->() const;
 
+            private:
+                EdgeSet::const_iterator iter_;
+                bool incoming_;
+        };
 
+    // implement for iterator
+
+    inline NodeIter::NodeIter(const Graph* graph, int id)
+        : graph_(graph), id_(id) {}
+
+    inline void NodeIter::operator++() {
+        // skip empty(nullptr)
+        while (1) {
+            DCHECK_LE(id_, graph_->num_node_ids());
+            ++id_;
+            if (id_ >= graph_->num_node_ids() || graph_->FindNodeId(id_) != nullptr) {
+                return;
+            }
+        }
+    }
+
+    inline Node* NodeIter::operator*() const { return graph_->FindNodeId(id_); }
+
+    inline Node* NodeIter::operator->() const { return graph_->FindNodeId(id_); }
+
+    inline bool NodeIter::operator==(const NodeIter& rhs) const {
+        DCHECK(graph_ == rhs.graph_);
+        return id_ == rhs.id_;
+    }
+
+    inline bool NodeIter::operator!=(const NodeIter& rhs) const {
+        return !(*this == rhs);
+    }
+    inline NeighborIter::NeighborIter(EdgeSet::const_iterator iter, bool incoming)
+        : iter_(iter), incoming_(incoming) {}
+    inline bool NeighborIter::operator==(const NeighborIter& rhs) const {
+        return iter_ == rhs.iter_ && incoming_ == rhs.incoming_;
+    }
+
+    inline bool NeighborIter::operator!=(const NeighborIter& rhs) const {
+        return !(*this == rhs);
+    }
+    inline void NeighborIter::operator++() { ++iter_; }
+
+    inline Node* NeighborIter::operator*() const {
+        const Edge* e = *iter_;
+        return incoming_ ? e->src() : e->dst();
+    }
+
+    inline Node* NeighborIter::operator->() const {
+        const Edge* e = *iter_;
+        return incoming_ ? e->src() : e->dst();
+    }
+
+    // node set device_name
+    inline void Node::set_assigned_device_name_index(int index) {
+        graph_->CheckDeviceNameIndex(index);
+        assigned_device_name_index_ = index;
+    }
+
+    inline void Node::set_assigned_device_name(const string& device_name) {
+        graph_->set_assigned_device_name(this, device_name);
+    }
+
+    inline const string& Node::assigned_device_name() const {
+        return graph_->get_assigned_device_name(*this);
+    }
 }
 
 #endif

@@ -21,7 +21,8 @@ namespace dlxnet{
                     :graph_def_(gdef),
                     g_(g),
                     refiner_(refiner),
-                    opts_(opts){
+                    opts_(opts),
+                    is_consumed_(graph_def_.node_size(), false){
                     }
 
                 static Status Construct(const GraphConstructorOptions& opts,
@@ -164,10 +165,10 @@ namespace dlxnet{
                     return errors::InvalidArgument("Node '", node_def.name(),
                             "' does not specify an operation");
                 }
-                if (node_def.device().empty()) {
-                    return errors::InvalidArgument("Node '", node_def.name(),
-                            "' is missing a device specification");
-                }
+                // if (node_def.device().empty()) {
+                    // return errors::InvalidArgument("Node '", node_def.name(),
+                            // "' is missing a device specification");
+                // }
             }
             return Status::OK();
         }
