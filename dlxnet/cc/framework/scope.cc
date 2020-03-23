@@ -26,9 +26,9 @@ namespace dlxnet{
     Scope Scope::WithOpName(Args... fragments) const {
         return WithOpName(absl::StrCat(fragments...));
     }
-    Status Scope::ToGraphDef(GraphDef* graph){
+    Status Scope::ToGraphDef(GraphDef* gdef){
         if (!ok()) {
-            return *impl()->status_;
+            return *status_;
         }
         graph()->ToGraphDef(gdef);
         return Status::OK();

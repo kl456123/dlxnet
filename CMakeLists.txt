@@ -26,6 +26,7 @@ include_directories(${Protobuf_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_LIST_DIR})
 
 set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/dlxnet/core)
+set(SRC_DIR ${SRC_DIR} ${CMAKE_CURRENT_LIST_DIR}/dlxnet/cc)
 
 
 # find all files
