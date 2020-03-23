@@ -331,6 +331,23 @@ namespace dlxnet{
                 }
             }
         }
+    template<class Shape>
+        /*static*/ Status TensorShapeBase<Shape>::IsValidShape(const TensorShapeProto& proto){
+            int64 num_elements = 1;
+            for(const auto& d: proto.dim()){
+                if(d.size()<0){
+                    return errors::InvalidArgument("Shape ", DebugString(proto),
+                            " is not fully defined");
+                }
+                num_elements *= d.size();
+                if (num_elements < 0) {
+                    return errors::InvalidArgument(
+                            "Shape ", DebugString(proto),
+                            " is too large (more than 2**63 - 1 entries)");
+                }
+            }
+            return Status::OK();
+        }
 
 
     string TensorShapeRep::DebugString(const TensorShapeProto& proto) {
@@ -353,6 +370,8 @@ namespace dlxnet{
         strings::StrAppend(&s, "]");
         return s;
     }
+
+
 
     template class TensorShapeBase<TensorShape>;
 

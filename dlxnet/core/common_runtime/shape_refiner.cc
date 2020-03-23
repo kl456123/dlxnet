@@ -12,7 +12,8 @@ namespace dlxnet{
     Status ShapeRefiner::AddNode(const Node* node){
         // Create the inference context for this node with the existing input shapes.
         std::unique_ptr<InferenceContext> ic(new InferenceContext(
-                    node->def(), node->op_def()));
+                    node->def(), node->op_def(),
+                    std::vector<ShapeHandle>(node->num_inputs())));
 
         // get input shape
         for (const Edge* e : node->in_edges()){

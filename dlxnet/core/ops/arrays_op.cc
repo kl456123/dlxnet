@@ -5,8 +5,10 @@ namespace dlxnet{
 
     using shape_inference::InferenceContext;
     using shape_inference::ShapeHandle;
+    using shape_inference::DimensionHandle;
 
-    // define many ops here
+    // define many perimitive ops here
+    // --------------------------------------------------------------------------
     REGISTER_OP("Placeholder")
         .Output("output: dtype")
         .Attr("dtype: type")
@@ -17,4 +19,23 @@ namespace dlxnet{
                 c->set_output(0, out);
                 return Status::OK();
                 });
+
+    // --------------------------------------------------------------------------
+  REGISTER_OP("Const")
+      .Output("output: dtype")
+      .Attr("value: tensor")
+      .Attr("dtype: type")
+      .SetShapeFn([](InferenceContext* c) {
+        const TensorProto* proto = nullptr;
+        TF_RETURN_IF_ERROR(c->GetAttr("value", &proto));
+        TF_RETURN_IF_ERROR(TensorShape::IsValidShape(proto->tensor_shape()));
+        TensorShape shape(proto->tensor_shape());
+        std::vector<DimensionHandle> dims;
+        dims.reserve(shape.dims());
+        for (int i = 0; i < shape.dims(); ++i) {
+          dims.push_back(c->MakeDim(shape.dim_size(i)));
+        }
+        c->set_output(0, c->MakeShape(dims));
+        return Status::OK();
+      });
 } // namespace dlxnet

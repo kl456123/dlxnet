@@ -6,11 +6,14 @@ namespace dlxnet{
     namespace shape_inference{
         // do inference just for single node
         InferenceContext::InferenceContext(const NodeDef& node_def,
-                const OpDef& op_def)
+                const OpDef& op_def, const std::vector<ShapeHandle>& input_shapes)
             :node_def_(node_def){
                 // init inputs and outputs
+                // fill input_name_map_ and output_name_map_,
+                // init outputs_ to nullptr
                 PreInputInit(op_def);
-                // inputs_.reserve();
+                if(!construction_status_.ok())return;
+                inputs_ = input_shapes;
             }
 
         void InferenceContext::PreInputInit(const OpDef& op_def){
@@ -28,6 +31,33 @@ namespace dlxnet{
 
         InferenceContext::~InferenceContext(){
         }
+
+        Status InferenceContext::input(StringPiece input_name, std::vector<ShapeHandle>* output) const{
+            const auto result = input_name_map_.find(input_name);
+            if(result==input_name_map_.end()){
+                return errors::InvalidArgument("Unknown input name: ", input_name);
+            }
+            output->clear();
+            for(int i=result->second.first;i<result->second.second;++i){
+                output->push_back(inputs_[i]);
+            }
+            return Status::OK();
+        }
+
+        Status InferenceContext::output(StringPiece output_name,
+                std::vector<ShapeHandle>* output) const {
+            const auto result = output_name_map_.find(output_name);
+            if (result == output_name_map_.end()) {
+                return errors::InvalidArgument("Unknown output name: ", output_name);
+            } else {
+                output->clear();
+                for (int i = result->second.first; i < result->second.second; ++i) {
+                    output->push_back(outputs_[i]);
+                }
+            }
+            return Status::OK();
+        }
+
         Status InferenceContext::Run(
                 const std::function<Status(shape_inference::InferenceContext* c)>& fn){
             Status s = fn(this);
@@ -36,6 +66,13 @@ namespace dlxnet{
             }
             return s;
         }
+
+        ShapeHandle InferenceContext::MakeShape(
+                const std::vector<DimensionHandle>& dims) {
+            all_shapes_.push_back(new Shape(dims));
+            return all_shapes_.back();
+        }
+
 
         string InferenceContext::DebugString() const{
         }

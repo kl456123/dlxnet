@@ -10,6 +10,55 @@ namespace dlxnet{
         // note that sig refers to types_vector
         Status AddArgToSig(const NodeDef& node_def,
                 const OpDef::ArgDef& arg_def, DataTypeVector* sig){
+            // four cases(three normal cases and one abnormal case)
+            if(!arg_def.number_attr().empty()){
+                // repeated times
+                int32 repeats = -1;
+                TF_RETURN_IF_ERROR(GetNodeAttr(node_def, arg_def.number_attr(), &repeats));
+                if(repeats<0){
+                    return errors::InvalidArgument("Value for number_attr() ", repeats,
+                            " < 0");
+                }
+                // find which type to use from type_attr or type field
+                if(!arg_def.type_attr().empty()){
+                    DataType dtype;
+                    TF_RETURN_IF_ERROR(
+                            GetNodeAttr(node_def, arg_def.type_attr(), &dtype));
+                    for(int i=0;i<repeats;++i){
+                        sig->push_back(dtype);
+                    }
+                }else if(arg_def.type()!=DT_INVALID){
+                    for(int i=0;i<repeats;++i){
+                        sig->push_back(arg_def.type());
+                    }
+                }
+                else{
+                    return errors::InvalidArgument("Missing type or type_attr field in ",
+                            arg_def.ShortDebugString());
+                }
+            }else if(!arg_def.type_attr().empty()){
+                // single types defined in attr
+                const AttrValue* attr_value;// no need to allocate new memory
+                TF_RETURN_IF_ERROR(AttrSlice(node_def).Find(arg_def.type_attr(), &attr_value));
+                sig->push_back(attr_value->type());
+            }else if(!arg_def.type_list_attr().empty()){
+                // list of types
+                const AttrValue* attr_value;
+                TF_RETURN_IF_ERROR(AttrSlice(node_def).Find(arg_def.type_list_attr(), &attr_value));
+                for(int dtype: attr_value->list().type()){
+                    sig->push_back(static_cast<DataType>(dtype));
+                }
+            }else if(arg_def.type()!=DT_INVALID){
+                // single perimitive type
+                sig->push_back(arg_def.type());
+            }
+            else{
+                // return error
+                return errors::InvalidArgument("No type fields in ",
+                        arg_def.ShortDebugString());
+            }
+
+            return Status::OK();
         }
     } // namespace
 
@@ -142,14 +191,16 @@ namespace dlxnet{
             DataTypeVector* inputs){
         for(const auto& arg: op_def.input_arg()){
             // get signature from arg
+            TF_RETURN_IF_ERROR(AddArgToSig(node_def, arg, inputs));
         }
         return Status::OK();
     }
 
     Status OutputTypesForNode(const NodeDef& node_def, const OpDef& op_def,
-            DataTypeVector* inputs){
+            DataTypeVector* outputs){
         for(const auto& arg: op_def.output_arg()){
-            // get from arg
+            // get signature from arg
+            TF_RETURN_IF_ERROR(AddArgToSig(node_def, arg, outputs));
         }
         return Status::OK();
     }
@@ -161,6 +212,9 @@ namespace dlxnet{
                 // Same type repeated "num" times.
                 return GetNodeAttr(attrs, arg_def.number_attr(), num);
             }else if(!arg_def.type_list_attr().empty()){
+                const AttrValue* attr_value;
+                TF_RETURN_IF_ERROR(attrs.Find(arg_def.type_list_attr(), &attr_value));
+                *num = attr_value->list().type_size();
             }else if(!arg_def.type_attr().empty() || arg_def.type() != DT_INVALID){
                 *num = 1;
             }else{
@@ -215,5 +269,24 @@ namespace dlxnet{
         *value = static_cast<int32>(v);
         return Status::OK();
     }
+
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            DataType* value){
+        const AttrValue* attr_value;
+        TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));
+        TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, ""));
+        const auto& v = attr_value->type();
+        *value = v;
+        return Status::OK();
+    }
+
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     const TensorProto** value) {
+    const AttrValue* attr_value;
+    TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));
+    TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, "tensor"));
+    *value = &attr_value->tensor();
+    return Status::OK();
+  }
 
 }// namespace dlxnet

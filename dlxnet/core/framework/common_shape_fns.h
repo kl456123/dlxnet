@@ -6,6 +6,7 @@
 namespace dlxnet{
     namespace shape_inference{
         Status UnknownShape(shape_inference::InferenceContext* c);
+        Status Conv2DShapeWithExplicitPadding(shape_inference::InferenceContext* c);
     }
 }
 

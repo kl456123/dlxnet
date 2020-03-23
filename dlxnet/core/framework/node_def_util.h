@@ -88,6 +88,10 @@ namespace dlxnet{
     // declarations for all types
     Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
             int32* value);  // type: "int"
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            DataType* value);// type: "DataType"
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            const TensorProto** value);
 
 
 }

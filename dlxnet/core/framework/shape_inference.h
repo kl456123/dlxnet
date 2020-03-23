@@ -78,7 +78,7 @@ namespace dlxnet{
             public:
                 static constexpr int32 kUnknownRank = -1;
                 InferenceContext(const NodeDef& node_def,
-                        const OpDef& op_def);
+                        const OpDef& op_def, const std::vector<ShapeHandle>& input_shapes);
                 ~InferenceContext();
                 // input();
                 // output();
@@ -86,14 +86,37 @@ namespace dlxnet{
 
                 // accessor
                 void SetInput(int idx, ShapeHandle shape){inputs_[idx] = shape;}
+                // access by index
                 ShapeHandle input(int64 idx) const { return inputs_[idx]; }
+                // access by attr_name
+                Status input(StringPiece input_name, std::vector<ShapeHandle>* output) const;
                 int num_inputs() const { return inputs_.size(); }
 
                 void set_output(int idx, ShapeHandle shape) { outputs_.at(idx) = shape; }
                 int num_outputs() const { return outputs_.size(); }
                 ShapeHandle output(int idx) const { return outputs_.at(idx); }
+                // access by attr_name
+                Status output(StringPiece output_name,
+                        std::vector<ShapeHandle>* output) const;
                 // Describes the whole context, for debugging purposes.
                 string DebugString() const;
+
+                // Look up the attr for the NodeDef being evaluated with name attr_name and
+                // set *value to its value.  If no attr with attr_name is found in def(), or
+                // the attr does not have a matching type, a non-ok status will be returned.
+                template <class T>
+                    Status GetAttr(StringPiece attr_name, T* value) const;
+
+                // Returns a new shape with the given dims. The returned value is owned by
+                // this context.
+                ShapeHandle MakeShape(const std::vector<DimensionHandle>& dims);
+
+                // Returns a new dimension of the given size.  The returned value is owned by
+                // this context.
+                inline DimensionHandle MakeDim(const int64 d) {
+                    all_dims_.push_back(new Dimension(d));
+                    return all_dims_.back();
+                }
             private:
                 // Shared initialization across the two constructors.  Remove
                 // once we get rid of one of them.
@@ -108,6 +131,10 @@ namespace dlxnet{
                 Status construction_status_;
 
                 const NodeDef& node_def_;
+
+                std::vector<Shape*> all_shapes_;    // values are owned.
+                std::vector<Dimension*> all_dims_;  // values are owned.
+
                 TF_DISALLOW_COPY_AND_ASSIGN(InferenceContext);
         };
         // -----------------------------------------------------------------------------
@@ -125,11 +152,12 @@ namespace dlxnet{
                 "InferenceContext::kUnknownDim but got "
                 << value;
         }
-    }
 
-
-
-
+        template <class T>
+            Status InferenceContext::GetAttr(StringPiece attr_name, T* value) const {
+                return GetNodeAttr(node_def_, attr_name, value);
+            }
+    }// namespace shape_inference
 }
 
 
