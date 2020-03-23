@@ -10,13 +10,17 @@ namespace dlxnet{
     // call ToGraphDef to serialize computation graph
     class Scope{
         public:
+            Scope(Scope& other);
+            ~Scope();
             template<typename ...Args>
-            Scope WithOpName(Args...);
+                Scope WithOpName(Args...)const;
             Status ToGraphDef(GraphDef* graph);
 
-            static NewRootScope();
+            static Scope NewRootScope();
 
         private:
+            Scope(Graph* graph, Status* status, ShapeRefiner* refiner,
+                    bool disable_shape_inference);
             ShapeRefiner* refiner_;// do shape inference
             Status* status_;// internal errors
             Graph* graph_;
