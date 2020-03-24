@@ -154,4 +154,51 @@ namespace dlxnet{
         ++num_edges_;
         return e;
     }
+
+    namespace {
+        void AddInput(NodeDef* dst, StringPiece src_name, int src_slot){
+            if(src_slot==0){
+                // just omit index when it's zero
+                dst->add_input(src_name.data(), src_name.size());
+            }else{
+                dst->add_input(strings::StrCat(src_name, ":", src_slot));
+            }
+        }
+    }// namespace
+    void Graph::ToGraphDef(GraphDef* graph_def) const{
+        graph_def->Clear();
+        graph_def->mutable_node()->Reserve(std::max(1, num_nodes()));
+
+        std::vector<Edge*> inputs;// construct once shared for all nodes
+        for(auto id =0;id<num_node_ids();++id){
+            const Node* node  = FindNodeId(id);
+            if(node==nullptr)continue;
+            NodeDef* node_def = graph_def->add_node();
+            *node_def = node->def();
+
+            // set assigned device name
+            if(!node->assigned_device_name().empty()){
+                node_def->set_device(node->assigned_device_name());
+            }
+
+            inputs.clear();
+            inputs.resize(node->num_inputs(), nullptr);
+
+            node_def->clear_input();
+            node_def->mutable_input()->Reserve(inputs.size());
+
+            for(size_t i=0;i<inputs.size();++i){
+                const Edge* edge = inputs[i];
+                if(edge==nullptr){
+                    node_def->add_input("");
+                }else{
+                    const Node* src = edge->src();
+                    // handle input name format
+                    AddInput(node_def, src->name(), edge->src_output());
+                }
+
+            }
+        }
+
+    }
 }
