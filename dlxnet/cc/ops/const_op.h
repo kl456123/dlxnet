@@ -8,7 +8,8 @@
 namespace dlxnet{
     namespace ops{
         // init from initializer_list
-        Node* Const(const Scope& scope, const Input& input, const TensorProto&value, DataType dtype);
+        Node* Const(const Scope& scope, const TensorProto&value, DataType dtype);
+        Node* Const(const Scope& scope, const Input::Initializer& val);
         // init from proto
         Output ConstFromProto(const Scope& scope, const TensorProto& proto);
 

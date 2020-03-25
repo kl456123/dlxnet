@@ -4,10 +4,12 @@ namespace dlxnet{
     // NodeOut
     NodeBuilder::NodeOut::NodeOut()
         : node(nullptr), index(0), dt(DT_FLOAT) {}
+    NodeBuilder::NodeOut::NodeOut(Node* n, int32 i)
+        : node(n), name(node!=nullptr?node->name():""), index(i), dt(DT_FLOAT) {}
 
     NodeBuilder::NodeBuilder(StringPiece name, StringPiece op_name,
             const OpRegistryInterface* op_registry)
-    :def_builder_(name, op_name, op_registry){}
+        :def_builder_(name, op_name, op_registry){}
     NodeBuilder::NodeBuilder(StringPiece name, const OpDef* op_def)
         :def_builder_(name, op_def){
         }

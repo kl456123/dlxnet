@@ -55,8 +55,19 @@ namespace dlxnet{
         }
     }
 
+    NodeDefBuilder& NodeDefBuilder::Device(StringPiece device_spec){
+        node_def_.set_device(string(device_spec));
+    }
+
     // all attribution functions
     NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const TensorProto& value){
+        return *this;
+    }
+    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const Tensor& value){
+        return *this;
+    }
+
+    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, int32 value){
         return *this;
     }
 }
