@@ -19,6 +19,12 @@ namespace dlxnet{
         node_def_.set_op(op_def_->name());
     }
 
+    NodeDefBuilder::NodeDefBuilder(StringPiece name, const OpDef* op_def)
+        :op_def_(op_def){
+            node_def_.set_name(string(name));
+            Initialize();
+        }
+
     NodeDefBuilder& NodeDefBuilder::Input(StringPiece src_node, int src_index,
             DataType dt){
     }
@@ -47,5 +53,10 @@ namespace dlxnet{
             AddDefaultsToNodeDef(*op_def_, node_def);
             return Status::OK();
         }
+    }
+
+    // all attribution functions
+    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const TensorProto& value){
+        return *this;
     }
 }

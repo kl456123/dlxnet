@@ -114,6 +114,12 @@ namespace dlxnet{
         return unique_name;
     }
 
+    string Scope::GetUniqueNameForOp(const string& default_name)const{
+        // when at op scope,  use the same name if op_name have already be specified
+        return impl()->op_name_.empty()? impl()->GetUniqueName(default_name)
+            :impl()->GetUniqueName(impl()->op_name_);
+    }
+
     /*static*/ Scope Scope::NewSubScope(const string& child_scope_name) const {
         // if child name is empty, copy from parent
         if (child_scope_name.empty()) {

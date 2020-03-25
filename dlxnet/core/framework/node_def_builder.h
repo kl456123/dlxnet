@@ -16,6 +16,7 @@ namespace dlxnet{
         public:
             NodeDefBuilder(StringPiece name, StringPiece op_name,
                     const OpRegistryInterface* op_reistry=OpRegistry::Global());
+            NodeDefBuilder(StringPiece name, const OpDef* op_def);
             ~NodeDefBuilder();
 
             NodeDefBuilder& Input(StringPiece src_node, int src_index,  DataType dt);
@@ -24,7 +25,9 @@ namespace dlxnet{
             // set some attrs
             NodeDefBuilder& Attr(StringPiece name, float value);
             NodeDefBuilder& Attr(StringPiece name, int32 value);
-            NodeDefBuilder& Attr(StringPiece name, AttrValue value);
+            NodeDefBuilder& Attr(StringPiece name, const AttrValue& value);
+            NodeDefBuilder& Attr(StringPiece name, AttrValue&& value);
+            NodeDefBuilder& Attr(StringPiece name, const TensorProto& value);
 
             Status Finalize(NodeDef* node_def);
 

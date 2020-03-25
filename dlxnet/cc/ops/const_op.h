@@ -3,13 +3,17 @@
 #include "dlxnet/cc/framework/scope.h"
 #include "dlxnet/cc/framework/ops.h"
 #include "dlxnet/core/framework/tensor.pb.h"
+#include "dlxnet/core/graph/node_builder.h"
 
 namespace dlxnet{
     namespace ops{
         // init from initializer_list
-        Output Const(const Scope& scope, const Input& input);
+        Node* Const(const Scope& scope, const Input& input, const TensorProto&value, DataType dtype);
         // init from proto
         Output ConstFromProto(const Scope& scope, const TensorProto& proto);
+
+        // Construct NodeOut struct
+        NodeBuilder::NodeOut AsNodeOut(const Scope& scope, const Input& inp);
     }
 }
 

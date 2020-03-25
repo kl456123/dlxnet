@@ -68,6 +68,8 @@ namespace dlxnet{
             //
             bool ok() const;
 
+            string GetUniqueNameForOp(const string& default_name)const;
+
             // TODO(skyewm): Graph is not part of public API
             Graph* graph() const;
 
