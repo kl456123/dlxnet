@@ -87,7 +87,9 @@ target_link_libraries(dlxnet ${DLXNET_DEPEND})
 # build demo
 if (BUILD_DEMO)
     add_executable(main ${CMAKE_CURRENT_LIST_DIR}/dlxnet/example/demo_main.cc)
+    add_executable(build_graph ${CMAKE_CURRENT_LIST_DIR}/dlxnet/example/build_graph.cc)
     target_link_libraries(main dlxnet)
+    target_link_libraries(build_graph dlxnet)
 endif()
 
 # build test

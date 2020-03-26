@@ -67,11 +67,24 @@ namespace dlxnet{
 
     template <class Shape>
         static void AppendTo(const TensorShapeBase<Shape>& s,
-                std::vector<int64_t>* vals) {
+                gtl::InlinedVector<int64, 8>* vals) {
             // for (auto dim : s) {
             // vals->push_back(dim.size);
             // }
         }
+
+    template <class Shape>
+        void TensorShapeBase<Shape>::AppendShape(const TensorShapeBase& shape) {
+            for (auto d : shape) AddDim(d);
+        }
+
+    bool TensorShape::IsSameSize(const TensorShape& b) const {
+    if (b.dims() != dims()) return false;
+    for (int d = 0; d < dims(); d++) {
+      if (dim_size(d) != b.dim_size(d)) return false;
+    }
+    return true;
+  }
 
     void TensorShape::CheckDimsEqual(int NDIMS) const {
         CHECK_EQ(NDIMS, dims()) << "Asking for tensor of " << NDIMS << " dimensions"
@@ -103,7 +116,7 @@ namespace dlxnet{
         }
 
     template <class Shape>
-        void TensorShapeBase<Shape>::InitDims(std::vector<int64_t> dim_sizes) {
+        void TensorShapeBase<Shape>::InitDims(gtl::ArraySlice<int64> dim_sizes) {
             CHECK_EQ(tag(), REP16);
 
             // Allow sizes that are under kint64max^0.25 so that 4-way multiplication
@@ -183,7 +196,7 @@ namespace dlxnet{
             CHECK_GE(end, 0);
             CHECK_LE(end, dims());
             if (begin >= end) return;
-            std::vector<int64_t> vals(8);
+            gtl::InlinedVector<int64, 8> vals;
             AppendTo(*this, &vals);
             vals.erase(vals.begin() + begin, vals.begin() + end);
             ClearAllButDataType();
@@ -193,8 +206,19 @@ namespace dlxnet{
             RecomputeNumElements();
         }
 
+    template <class Shape>
+        TensorShapeIter<Shape> TensorShapeBase<Shape>::begin() const {
+            return TensorShapeIter<Shape>(static_cast<const Shape*>(this), 0);
+        }
+
+    template <class Shape>
+        TensorShapeIter<Shape> TensorShapeBase<Shape>::end() const {
+            CHECK(!unknown_rank());
+            return TensorShapeIter<Shape>(static_cast<const Shape*>(this), dims());
+        }
+
     template<typename Shape>
-        void TensorShapeBase<Shape>::AddDim(int64_t size) {
+        void TensorShapeBase<Shape>::AddDim(int64 size) {
             if (unknown_rank()) return;
             CHECK_LT(ndims_byte(), MaxDimensions()) << "Too many dimensions in tensor";
             int64_t new_num_elements;
@@ -219,7 +243,7 @@ namespace dlxnet{
                 // as64()->dims_->push_back(size);
             } else {
                 // Need to change representation
-                std::vector<int64_t> vals(8);
+                gtl::InlinedVector<int64, 8> vals;
                 AppendTo(*this, &vals);
                 vals.push_back(size);
                 // We know we can't be REP16.  See if we have a small enough
@@ -260,7 +284,7 @@ namespace dlxnet{
         }
 
     template <class Shape>
-        TensorShapeBase<Shape>::TensorShapeBase(std::vector<int64_t> dim_sizes) {
+        TensorShapeBase<Shape>::TensorShapeBase(gtl::ArraySlice<int64> dim_sizes) {
             set_tag(REP16);
             set_data_type(DT_INVALID);
             InitDims(dim_sizes);

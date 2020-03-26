@@ -6,8 +6,12 @@
 
 #include "dlxnet/core/public/session.h"
 #include "dlxnet/cc/ops/const_op.h"
+#include "dlxnet/cc/ops/array_ops.h"
 
 using dlxnet::string;
+using dlxnet::Status;
+using dlxnet::Scope;
+using dlxnet::Tensor;
 
 Status TestMatMul(){
     using namespace dlxnet::ops;

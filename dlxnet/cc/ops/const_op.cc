@@ -34,10 +34,10 @@ namespace dlxnet{
             }
             return ConstHelper(scope, val.tensor, val.tensor.dtype());
         }
-        Node* Const(const Scope& scope, const TensorProto& val){
-            return ConstHelper(scope, val, val.dtype());
-        }
-        Output ConstFromProto(const Scope& scope, const TensorProto& proto){
+
+
+        Node* ConstFromProto(const Scope& scope, const TensorProto& proto){
+            return ConstHelper(scope, proto, proto.dtype());
         }
 
         // convert from input to node_out used in node builder
@@ -52,7 +52,7 @@ namespace dlxnet{
             }
 
             auto transformed = Input{
-                Const(scope.NewSubScope("Const"), Input::Initializer())};
+                Const(scope.NewSubScope("Const"), Input::Initializer(inp.tensor()))};
             return NodeBuilder::NodeOut(transformed.node(), transformed.index());
         }
     }

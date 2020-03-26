@@ -1,5 +1,6 @@
 #include "dlxnet/core/framework/op.h"
 #include "dlxnet/core/framework/shape_inference.h"
+#include "dlxnet/core/framework/common_shape_fns.h"
 
 namespace dlxnet{
 

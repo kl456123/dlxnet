@@ -28,11 +28,17 @@ namespace dlxnet{
             NodeDefBuilder& Attr(StringPiece name, AttrValue&& value);
             NodeDefBuilder& Attr(StringPiece name, const TensorProto& value);
             NodeDefBuilder& Attr(StringPiece name, const Tensor& value);
+            NodeDefBuilder& Attr(StringPiece name, DataType value);
 
             Status Finalize(NodeDef* node_def);
 
             const string& node_name()const {return node_def_.name();}
             const OpDef& op_def()const{return *op_def_;}
+
+            // Returns true if an attr named `name` is already present in the node_def_.
+            // If such an attr is already present and `value` is not equal to the present
+            // value, an error is generated.
+            bool AttrValueAlreadyPresent(StringPiece name, const AttrValue& value);
 
         private:
             // init to construct

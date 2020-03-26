@@ -209,16 +209,16 @@ namespace dlxnet{
         // TensorShape shape(proto.tensor_shape());
         // const int64 N = shape.num_elements();
         // if (N > 0 && proto.dtype()) {
-            // bool dtype_error = false;
-            // if (!proto.tensor_content().empty()) {
-                // const auto& content = proto.tensor_content();
-                // CASES_WITH_DEFAULT(proto.dtype(), p = Helper<T>::Decode(a, content, N),
-                        // dtype_error = true, dtype_error = true);
-            // } else {
-                // CASES_WITH_DEFAULT(proto.dtype(), p = FromProtoField<T>(a, proto, N),
-                        // dtype_error = true, dtype_error = true);
-            // }
-            // if (dtype_error || p == nullptr) return false;
+        // bool dtype_error = false;
+        // if (!proto.tensor_content().empty()) {
+        // const auto& content = proto.tensor_content();
+        // CASES_WITH_DEFAULT(proto.dtype(), p = Helper<T>::Decode(a, content, N),
+        // dtype_error = true, dtype_error = true);
+        // } else {
+        // CASES_WITH_DEFAULT(proto.dtype(), p = FromProtoField<T>(a, proto, N),
+        // dtype_error = true, dtype_error = true);
+        // }
+        // if (dtype_error || p == nullptr) return false;
         // }
         // shape_ = shape;
         // set_dtype(proto.dtype());
@@ -227,8 +227,8 @@ namespace dlxnet{
         // // TODO(misard) add tracking of which kernels and steps are calling
         // // FromProto.
         // if (buf_ != nullptr && buf_->data() != nullptr && LogMemory::IsEnabled()) {
-            // LogMemory::RecordTensorAllocation("Unknown (from Proto)",
-                    // LogMemory::UNKNOWN_STEP_ID, *this);
+        // LogMemory::RecordTensorAllocation("Unknown (from Proto)",
+        // LogMemory::UNKNOWN_STEP_ID, *this);
         // }
         return true;
     }
@@ -253,6 +253,11 @@ namespace dlxnet{
     string Tensor::DeviceSafeDebugString() const {
         return strings::StrCat("Tensor<type: ", DataTypeString(dtype()),
                 " shape: ", shape().DebugString(), ">");
+    }
+
+    StringPiece Tensor::tensor_data() const {
+        if (buf_ == nullptr) return StringPiece();  // Don't die for empty tensors
+        return StringPiece(static_cast<char*>(buf_->data()), TotalBytes());
     }
 
 

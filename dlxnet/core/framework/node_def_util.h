@@ -52,6 +52,7 @@ namespace dlxnet{
     void AddDefaultsToNodeDef(const OpDef& op_def, NodeDef* node_def);
 
     void AddNodeAttr(StringPiece name, const AttrValue& value, NodeDef* node_def);
+    void AddNodeAttr(StringPiece name, AttrValue&& value, NodeDef* node_def);
 
     // Validates that the NodeDef:
     // * Defines all expected attrs from the OpDef.

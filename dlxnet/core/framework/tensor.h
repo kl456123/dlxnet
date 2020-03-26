@@ -8,6 +8,9 @@
 #include "dlxnet/core/framework/types.pb.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/framework/tensor_description.pb.h"
+#include "dlxnet/core/framework/tensor_types.h"
+#include "dlxnet/core/lib/gtl/array_slice.h"
+#include "dlxnet/core/framework/types.h"
 
 namespace dlxnet{
 
@@ -155,7 +158,26 @@ namespace dlxnet{
             string DeviceSafeDebugString() const;
             string DebugString() const { return DebugString(3); }
 
+            StringPiece tensor_data() const;
+
             void FillDescription(TensorDescription* description) const;
+            template<typename T>
+                typename TTypes<T>::Flat flat(){
+                    // only single dim
+                    return shaped<T, 1>({NumElements()});
+                }
+
+            template<typename T, size_t NDIMS>
+                typename TTypes<T, NDIMS>::Tensor shaped(gtl::ArraySlice<int64> new_sizes);
+
+            // check shape when view tensor(call flat<>() or tensor<>()) bit_casted capable
+            template<typename T, size_t NDIMS>
+                void FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
+                        Eigen::array<Eigen::DenseIndex, NDIMS>* dims);
+
+            template<size_t NDIMS>
+                void FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
+                        Eigen::array<Eigen::DenseIndex, NDIMS>* dims);
         private:
             void set_dtype(DataType t) { shape_.set_data_type(t); }
             void set_shape(const TensorShape& shape) {
@@ -165,6 +187,7 @@ namespace dlxnet{
             }
             TensorShape shape_;
             TensorBuffer* buf_;
+            // use shaped instead of base to get internal data
             template <typename T>
                 T* base() const;
     };
@@ -172,6 +195,43 @@ namespace dlxnet{
     template <typename T>
         T* Tensor::base() const {
             return buf_ == nullptr ? nullptr : buf_->base<T>();
+        }
+    template<typename T, size_t NDIMS>
+        typename TTypes<T, NDIMS>::Tensor Tensor::shaped(gtl::ArraySlice<int64> new_sizes){
+            Eigen::array<Eigen::DenseIndex, NDIMS> dims;
+            FillDimsAndValidateCompatibleShape(new_sizes, &dims);
+            return typename TTypes<T, NDIMS>::Tensor(base<T>(), dims);
+        }
+
+    template<typename T, size_t NDIMS>
+        void Tensor::FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
+                Eigen::array<Eigen::DenseIndex, NDIMS>* dims){
+            // check rank
+            CHECK_EQ(NDIMS, new_sizes.size());
+            int64 new_num_elements = 1;
+            for(size_t i=0;i<NDIMS;i++){
+                new_num_elements*= new_sizes[i];
+                // fill dims at the same time
+                (*dims)[i] = new_sizes[i];
+            }
+            // check dtype by using memory size consistence
+            const int element_size = DataTypeSize(BaseType(dtype()));
+            CHECK_EQ(new_num_elements*sizeof(T), NumElements()*element_size);
+        }
+
+    template<size_t NDIMS>
+        void Tensor::FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
+                Eigen::array<Eigen::DenseIndex, NDIMS>* dims){
+            // check rank
+            CHECK_EQ(NDIMS, new_sizes.size());
+            int64 new_num_elements = 1;
+            for(size_t i=0;i<NDIMS;i++){
+                new_num_elements*= new_sizes[i];
+                // fill dims at the same time
+                (*dims)[i] = new_sizes[i];
+            }
+            // check total size
+            CHECK_EQ(new_num_elements, NumElements());
         }
 
 

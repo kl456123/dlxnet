@@ -27,5 +27,10 @@ namespace dlxnet{
         Status Conv2DShapeWithExplicitPadding(shape_inference::InferenceContext* c){
             Conv2DShapeImpl(c);
         }
+
+
+        Status MatMulShape(shape_inference::InferenceContext* c){
+            return Status::OK();
+        }
     }// shape_inference
 }// namespace dlxnet

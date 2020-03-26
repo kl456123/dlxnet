@@ -60,14 +60,73 @@ namespace dlxnet{
     }
 
     // all attribution functions
-    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const TensorProto& value){
-        return *this;
+    // NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const TensorProto& value){
+    // return *this;
+    // }
+    // NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const Tensor& value){
+    // return *this;
+    // }
+
+    // NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, int32 value){
+    // return *this;
+    // }
+
+    bool NodeDefBuilder::AttrValueAlreadyPresent(StringPiece name,
+            const AttrValue& value) {
+        if (const AttrValue* found = AttrSlice(node_def_).Find(name)) {
+            return true;
+        }
+        return false;
     }
-    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const Tensor& value){
+
+    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const AttrValue& value) {
+        if (!AttrValueAlreadyPresent(name, value)) {
+            AddNodeAttr(name, value, &node_def_);
+        }
         return *this;
     }
 
-    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, int32 value){
+    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, AttrValue&& value) {
+        if (!AttrValueAlreadyPresent(name, value)) {
+            AddNodeAttr(name, std::move(value), &node_def_);
+        }
         return *this;
     }
-}
+
+
+#define ATTR(T)                                                         \
+        NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, T value) {   \
+            AttrValue attr_value;                                           \
+            SetAttrValue(value, &attr_value);                               \
+            return Attr(name, attr_value);                                  \
+        }
+
+        // ATTR(StringPiece)
+        // ATTR(const char*)
+        ATTR(int32)
+            // ATTR(int64)
+            ATTR(float)
+            // ATTR(double)
+            // ATTR(bool)
+            ATTR(DataType)
+            ATTR(const Tensor&)
+            ATTR(const TensorProto&)
+            // ATTR(const NameAttrList&)
+            // ATTR(gtl::ArraySlice<StringPiece>)
+            // ATTR(gtl::ArraySlice<const char*>)
+            // ATTR(gtl::ArraySlice<string>)
+            // ATTR(gtl::ArraySlice<int32>)
+            // ATTR(gtl::ArraySlice<int64>)
+            // ATTR(gtl::ArraySlice<float>)
+            // ATTR(gtl::ArraySlice<bool>)
+            // ATTR(const std::vector<bool>&)
+            // ATTR(gtl::ArraySlice<DataType>)
+            // ATTR(gtl::ArraySlice<TensorShape>)
+            // ATTR(gtl::ArraySlice<PartialTensorShape>)
+            // ATTR(gtl::ArraySlice<TensorShapeProto>)
+            // ATTR(gtl::ArraySlice<Tensor>)
+            // ATTR(gtl::ArraySlice<NameAttrList>)
+#undef ATTR
+
+
+    }

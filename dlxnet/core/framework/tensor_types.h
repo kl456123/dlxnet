@@ -13,12 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_FRAMEWORK_TENSOR_TYPES_H_
-#define TENSORFLOW_CORE_FRAMEWORK_TENSOR_TYPES_H_
+#ifndef DLXNET_CORE_FRAMEWORK_TENSOR_TYPES_H_
+#define DLXNET_CORE_FRAMEWORK_TENSOR_TYPES_H_
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 
-namespace tensorflow {
+namespace dlxnet {
 
 // Helper to define Tensor types given that the scalar is of type T.
 template <typename T, int NDIMS = 1, typename IndexType = Eigen::DenseIndex>
@@ -122,5 +122,5 @@ To32Bit(TensorType in) {
   return RetType(in.data(), To32BitDims(in.dimensions()));
 }
 
-}  // namespace tensorflow
-#endif  // TENSORFLOW_CORE_FRAMEWORK_TENSOR_TYPES_H_
+}  // namespace dlxnet
+#endif  // DLXNET_CORE_FRAMEWORK_TENSOR_TYPES_H_

@@ -76,6 +76,10 @@ namespace dlxnet{
         node_def->mutable_attr()->insert(AttrValueMap::value_type(string(name), value));
     }
 
+    void AddNodeAttr(StringPiece name, AttrValue&& value, NodeDef* node_def) {
+        (*node_def->mutable_attr())[string(name)] = std::move(value);
+    }
+
     string SummarizeNode(const Node& node){
         return SummarizeNodeDef(node.def());
     }
@@ -281,12 +285,12 @@ namespace dlxnet{
     }
 
     Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
-                     const TensorProto** value) {
-    const AttrValue* attr_value;
-    TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));
-    TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, "tensor"));
-    *value = &attr_value->tensor();
-    return Status::OK();
-  }
+            const TensorProto** value) {
+        const AttrValue* attr_value;
+        TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));
+        TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, "tensor"));
+        *value = &attr_value->tensor();
+        return Status::OK();
+    }
 
 }// namespace dlxnet

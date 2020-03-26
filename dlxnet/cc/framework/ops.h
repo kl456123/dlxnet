@@ -3,6 +3,7 @@
 #include "dlxnet/core/graph/graph.h"
 #include "dlxnet/core/framework/types.pb.h"
 #include "dlxnet/core/framework/tensor.h"
+#include "dlxnet/core/framework/tensor_shape.h"
 
 namespace dlxnet{
     // just wrap node and edge
@@ -20,6 +21,39 @@ namespace dlxnet{
         public:
             // from scalar type or list type to tensor
             struct Initializer{
+                // single number or string
+                template<typename T, typename = typename std::enable_if<
+                    std::is_convertible<T, string>::value ||
+                    std::is_arithmetic<T>::value>::type>
+                    Initializer(const T& value){
+                        // create empty tensor using type and shape
+                        Tensor t(DataTypeToEnum<T>::v(), TensorShape());
+                        // assign value
+                        t.flat<T>()[0] = value;
+                        tensor = t ;
+                    }
+
+                // list of single number of string
+                /// Construct from a initializer list of scalars (a one-dimensional tensor).
+                template <typename T, typename = typename std::enable_if<
+                    std::is_arithmetic<T>::value ||
+                    std::is_convertible<T, string>::value>::type>
+                    Initializer(
+                            const std::initializer_list<T>& v){
+                        Tensor t(DataTypeToEnum<T>::v(),
+                                TensorShape{static_cast<int>(v.size())});
+                        std::copy_n(v.begin(), v.size(), t.flat<T>().data());
+                        tensor = t;
+                    }
+
+                Initializer(const Tensor& t) : tensor(t) {}  // NOLINT(runtime/explicit)
+
+                /// Construct a multi-dimensional tensor from a nested initializer
+                /// list. Note that C++ syntax allows nesting of arbitrarily typed
+                /// initializer lists, so such invalid initializers cannot be disallowed at
+                /// compile time. This function performs checks to make sure that the nested
+                /// initializer list is indeed a valid multi-dimensional tensor.
+                Initializer(const std::initializer_list<Initializer>& v);
                 Tensor tensor;
                 Status status;
             };
