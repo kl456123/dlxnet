@@ -1,4 +1,5 @@
 #include "dlxnet/core/graph/graph.h"
+#include "dlxnet/core/lib/stringprintf.h"
 
 
 namespace dlxnet{
@@ -77,7 +78,28 @@ namespace dlxnet{
     Graph::Graph(const OpRegistryInterface* ops)
         :ops_(OpRegistry::Global()),
         arena_(8 << 10 /* 8kB */){
+            // Initialize the name interning table for assigned_device_name.
+            device_names_.push_back("");
+            DCHECK_EQ(0, InternDeviceName(""));
         }
+
+    int Graph::InternDeviceName(const string& device_name){
+        if(device_name.empty()){
+            // avoid lookup in table
+            return 0;
+        }
+
+        int& index_cell = device_names_map_[device_name];
+        if(index_cell>0){
+            // exist in the table
+            return index_cell;
+        }
+
+        // not exsit in the table
+        index_cell = device_names_map_.size();
+        device_names_.push_back(device_name);
+        return index_cell;
+    }
     Graph::~Graph(){
         // Manually call the destructors for all the Nodes we constructed using
         // placement new.
@@ -165,11 +187,12 @@ namespace dlxnet{
             }
         }
     }// namespace
+
     void Graph::ToGraphDef(GraphDef* graph_def) const{
         graph_def->Clear();
         graph_def->mutable_node()->Reserve(std::max(1, num_nodes()));
 
-        std::vector<Edge*> inputs;// construct once shared for all nodes
+        std::vector<const Edge*> inputs;// construct once shared for all nodes
         for(auto id =0;id<num_node_ids();++id){
             const Node* node  = FindNodeId(id);
             if(node==nullptr)continue;
@@ -183,7 +206,22 @@ namespace dlxnet{
 
             inputs.clear();
             inputs.resize(node->num_inputs(), nullptr);
+            // fill inputs
+            for(const Edge* edge: node->in_edges()){
+                DCHECK(edge->dst_input() < inputs.size())
+                    << "Edge " << edge->DebugString()
+                    << " is overflowing the expected number of inputs ("
+                    << node->num_inputs() << ") for node " << node->DebugString();
+                CHECK(inputs[edge->dst_input()] == nullptr)
+                    << "Edge " << edge->src()->name() << "->" << edge->dst()->name()
+                    << " conflicts with pre-existing input edge "
+                    << inputs[edge->dst_input()]->src()->name() << "->"
+                    << inputs[edge->dst_input()]->dst()->name();
 
+                inputs[edge->dst_input()] = edge;
+            }
+
+            // add each input to node_def
             node_def->clear_input();
             node_def->mutable_input()->Reserve(inputs.size());
 
@@ -201,4 +239,8 @@ namespace dlxnet{
         }
 
     }
-}
+    string Edge::DebugString() const {
+        return strings::Printf("[id=%d %s:%d -> %s:%d]", id_, src_->name().c_str(),
+                src_output_, dst_->name().c_str(), dst_input_);
+    }
+}// namespace dlxnet

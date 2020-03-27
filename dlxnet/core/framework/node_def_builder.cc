@@ -25,8 +25,76 @@ namespace dlxnet{
             Initialize();
         }
 
+    const OpDef::ArgDef* NodeDefBuilder::NextArgDef(){
+        // next util stop
+        if(!NextArgAvailable()){
+            return nullptr;
+        }
+        return &op_def_->input_arg(inputs_specified_++);
+    }
+
+    bool NodeDefBuilder::NextArgAvailable(){
+        if(op_def_==nullptr)return false;
+        if(inputs_specified_>=op_def_->input_arg_size()){
+            // out of range in input
+            errors_.push_back(strings::StrCat("More Input() calls than the ",
+                        op_def_->input_arg_size(),
+                        " input_args"));
+            return false;
+        }
+        return true;
+    }
+
     NodeDefBuilder& NodeDefBuilder::Input(StringPiece src_node, int src_index,
             DataType dt){
+        // move pointer to the next pos
+        const OpDef::ArgDef* arg = NextArgDef();
+        if(arg!=nullptr) SingleInput(arg, src_node, src_index, dt);
+        return *this;
+    }
+
+    void NodeDefBuilder::AddInput(StringPiece src_node, int src_index) {
+        if (src_node.empty()) {
+            errors_.push_back("Empty input node name");
+        }  else if (src_index > 0) {
+            node_def_.add_input(strings::StrCat(src_node, ":", src_index));
+        } else {
+            node_def_.add_input(string(src_node));
+        }
+    }
+
+    void NodeDefBuilder::SingleInput(const OpDef::ArgDef* input_arg, StringPiece src_node,
+            int src_index, DataType dt){
+        // add to node_def first
+        AddInput(src_node, src_index);
+        // then check it type
+        if (input_arg->type() != DT_INVALID) {
+            const DataType expected = MaybeAddRef(input_arg, input_arg->type());
+            VerifyInputType(input_arg, expected, dt);
+        } else {
+            // must be reference type if datatype is invalid
+            VerifyInputRef(input_arg, dt);
+            Attr(input_arg->type_attr(), BaseType(dt));
+        }
+    }
+
+    // verify ref and type
+    void NodeDefBuilder::VerifyInputType(const OpDef::ArgDef* input_arg,
+            DataType expected, DataType dt) {
+        if (!TypesCompatible(expected, dt)) {
+            errors_.push_back(strings::StrCat("Input '", input_arg->name(), "' passed ",
+                        DataTypeString(dt), " expected ",
+                        DataTypeString(expected)));
+        }
+    }
+
+    void NodeDefBuilder::VerifyInputRef(const OpDef::ArgDef* input_arg,
+            DataType dt) {
+        if (input_arg->is_ref() && !IsRefType(dt)) {
+            errors_.push_back(strings::StrCat("Input '", input_arg->name(), "' passed ",
+                        DataTypeString(dt),
+                        " expected ref type"));
+        }
     }
 
     Status NodeDefBuilder::Finalize(NodeDef* node_def){
@@ -57,19 +125,11 @@ namespace dlxnet{
 
     NodeDefBuilder& NodeDefBuilder::Device(StringPiece device_spec){
         node_def_.set_device(string(device_spec));
+        return *this;
     }
 
     // all attribution functions
-    // NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const TensorProto& value){
-    // return *this;
-    // }
-    // NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, const Tensor& value){
-    // return *this;
-    // }
-
-    // NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, int32 value){
-    // return *this;
-    // }
+    // for each kind of attr, they should be converted to AttrValue
 
     bool NodeDefBuilder::AttrValueAlreadyPresent(StringPiece name,
             const AttrValue& value) {
@@ -95,38 +155,38 @@ namespace dlxnet{
 
 
 #define ATTR(T)                                                         \
-        NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, T value) {   \
-            AttrValue attr_value;                                           \
-            SetAttrValue(value, &attr_value);                               \
-            return Attr(name, attr_value);                                  \
-        }
+    NodeDefBuilder& NodeDefBuilder::Attr(StringPiece name, T value) {   \
+        AttrValue attr_value;                                           \
+        SetAttrValue(value, &attr_value);                               \
+        return Attr(name, attr_value);                                  \
+    }
 
-        // ATTR(StringPiece)
-        // ATTR(const char*)
-        ATTR(int32)
-            // ATTR(int64)
-            ATTR(float)
-            // ATTR(double)
-            // ATTR(bool)
-            ATTR(DataType)
-            ATTR(const Tensor&)
-            ATTR(const TensorProto&)
-            // ATTR(const NameAttrList&)
-            // ATTR(gtl::ArraySlice<StringPiece>)
-            // ATTR(gtl::ArraySlice<const char*>)
-            // ATTR(gtl::ArraySlice<string>)
-            // ATTR(gtl::ArraySlice<int32>)
-            // ATTR(gtl::ArraySlice<int64>)
-            // ATTR(gtl::ArraySlice<float>)
-            // ATTR(gtl::ArraySlice<bool>)
-            // ATTR(const std::vector<bool>&)
-            // ATTR(gtl::ArraySlice<DataType>)
-            // ATTR(gtl::ArraySlice<TensorShape>)
-            // ATTR(gtl::ArraySlice<PartialTensorShape>)
-            // ATTR(gtl::ArraySlice<TensorShapeProto>)
-            // ATTR(gtl::ArraySlice<Tensor>)
-            // ATTR(gtl::ArraySlice<NameAttrList>)
+    // ATTR(StringPiece)
+    // ATTR(const char*)
+    ATTR(int32)
+        // ATTR(int64)
+        ATTR(float)
+        // ATTR(double)
+        // ATTR(bool)
+        ATTR(DataType)
+        ATTR(const Tensor&)
+        ATTR(const TensorProto&)
+        // ATTR(const NameAttrList&)
+        // ATTR(gtl::ArraySlice<StringPiece>)
+        // ATTR(gtl::ArraySlice<const char*>)
+        // ATTR(gtl::ArraySlice<string>)
+        // ATTR(gtl::ArraySlice<int32>)
+        // ATTR(gtl::ArraySlice<int64>)
+        // ATTR(gtl::ArraySlice<float>)
+        // ATTR(gtl::ArraySlice<bool>)
+        // ATTR(const std::vector<bool>&)
+        // ATTR(gtl::ArraySlice<DataType>)
+        // ATTR(gtl::ArraySlice<TensorShape>)
+        // ATTR(gtl::ArraySlice<PartialTensorShape>)
+        // ATTR(gtl::ArraySlice<TensorShapeProto>)
+        // ATTR(gtl::ArraySlice<Tensor>)
+        // ATTR(gtl::ArraySlice<NameAttrList>)
 #undef ATTR
 
 
-    }
+}

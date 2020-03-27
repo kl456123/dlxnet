@@ -297,8 +297,11 @@ namespace dlxnet{
 
             void set_assigned_device_name(Node* node, const string& device_name) {
                 // TODO(add device name map for efficiency)
-                // node->assigned_device_name_index_ = InternDeviceName(device_name);
+                node->assigned_device_name_index_ = InternDeviceName(device_name);
             }
+
+
+            int InternDeviceName(const string& device_name);
 
         private:
             // If cost_node is non-null, then cost accounting (in CostModel)

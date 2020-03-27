@@ -21,7 +21,8 @@ Status TestMatMul(){
     auto b = Const(root, {{2, 2}, {1, 1}});
     // axb
     string output_name = "m";
-    auto m = MatMul(root, a, b);
+    auto matmul_attrs = MatMul::Attrs().TransposeA(false).TransposeB(false);
+    auto m = MatMul(root, a, b, matmul_attrs);
 
     // This runs the GraphDef network definition that we've just constructed, and
     // returns the results in the output tensor.
@@ -38,5 +39,9 @@ Status TestMatMul(){
 }
 
 int main(){
-    TestMatMul();
+    Status status = TestMatMul();
+    if(!status.ok()){
+        LOG(ERROR) << "Test MatMul model failed: " << status;
+        return -1;
+    }
 }

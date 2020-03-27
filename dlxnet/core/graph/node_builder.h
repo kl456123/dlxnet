@@ -37,7 +37,7 @@ namespace dlxnet{
 
             // Set *dt and returns true if i is in range. Combines
             // SafeGetOutput() and AddIndexError().
-            bool GetOutputType(const Node* node, int i, DataType* dt);
+            static bool GetOutputType(const Node* node, int i, DataType* dt);
 
         private:
             NodeDefBuilder def_builder_;

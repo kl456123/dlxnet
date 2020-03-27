@@ -5,7 +5,9 @@ namespace dlxnet{
     NodeBuilder::NodeOut::NodeOut()
         : node(nullptr), index(0), dt(DT_FLOAT) {}
     NodeBuilder::NodeOut::NodeOut(Node* n, int32 i)
-        : node(n), name(node!=nullptr?node->name():""), index(i), dt(DT_FLOAT) {}
+        : node(n), name(node!=nullptr?node->name():""), index(i){
+            GetOutputType(node, i, &dt);
+        }
 
     NodeBuilder::NodeBuilder(StringPiece name, StringPiece op_name,
             const OpRegistryInterface* op_registry)
@@ -63,11 +65,12 @@ namespace dlxnet{
         return Status::OK();
     }
 
-    bool NodeBuilder::GetOutputType(const Node* node, int i, DataType* dt) {
+    /*static*/ bool NodeBuilder::GetOutputType(const Node* node, int i, DataType* dt) {
         if(node!=nullptr && i>=0&&i<node->num_outputs()){
             *dt = node->output_type(i);
             return true;
         }else{
+            *dt = DT_FLOAT;
             return false;
         }
     }

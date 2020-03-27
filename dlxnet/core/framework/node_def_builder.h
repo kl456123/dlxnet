@@ -35,12 +35,40 @@ namespace dlxnet{
             const string& node_name()const {return node_def_.name();}
             const OpDef& op_def()const{return *op_def_;}
 
+
+
+        private:
+            // for internal usage purpose
+
+            // Get the current ArgDef and advance to the next one. Returns nullptr
+            // if no more inputs are available.
+            const OpDef::ArgDef* NextArgDef();
+
+            // Returns true if there is still an input_arg available in *op_def_,
+            // otherwise adds to error_ and returns false.
+            bool NextArgAvailable();
             // Returns true if an attr named `name` is already present in the node_def_.
             // If such an attr is already present and `value` is not equal to the present
             // value, an error is generated.
             bool AttrValueAlreadyPresent(StringPiece name, const AttrValue& value);
 
-        private:
+            void AddInput(StringPiece src_node, int src_index);
+
+            // These do the main work of the Input() methods.
+            void SingleInput(const OpDef::ArgDef* input_arg, StringPiece src_node,
+                    int src_index, DataType dt);
+            // Makes dt a ref type if that is what the input_arg specifies.
+            DataType MaybeAddRef(const OpDef::ArgDef* input_arg, DataType dt) {
+                return input_arg->is_ref() ? MakeRefType(dt) : dt;
+            }
+
+            // Generate an error if you can't pass dt when expected is expected.
+            void VerifyInputType(const OpDef::ArgDef* input_arg, DataType expected,
+                    DataType dt);
+
+            // If input_arg->is_ref() is true, generate an error if dt is not a ref.
+            void VerifyInputRef(const OpDef::ArgDef* input_arg, DataType dt);
+
             // init to construct
             void Initialize();
             const OpDef* op_def_;

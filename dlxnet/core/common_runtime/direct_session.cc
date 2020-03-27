@@ -176,6 +176,7 @@ namespace dlxnet{
             const std::vector<string>& target_nodes, std::vector<Tensor>* outputs,
             RunMetadata* run_metadata,
             const thread::ThreadPoolOptions& threadpool_options){
+        return Status::OK();
     }
 
     Status DirectSession::Create(const GraphDef& graph){
