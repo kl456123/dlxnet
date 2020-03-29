@@ -298,6 +298,7 @@ namespace dlxnet{
 
     bool DataTypeFromString(StringPiece sp, DataType* dt);
     string DataTypeString(DataType dtype);
+    string DeviceTypeString(const DeviceType& device_type);
 
     // Returns a 0 on failure
     int DataTypeSize(DataType dt);

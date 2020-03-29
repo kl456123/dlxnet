@@ -67,6 +67,17 @@ namespace dlxnet{
                 // Pass in an empty string as physical device name.
                 return BuildDeviceAttributes(name, device, memory_limit, locality, "");
             }
+
+            // Sets `out_context` a new DeviceContext* for executing a graph, or nullptr
+            // if the device does not support contexts. Returns an error status if any
+            // error occurred while trying to create a context, otherwise OK.
+            //
+            // The caller takes ownership of one reference on the output DeviceContext*,
+            // and should call Unref().
+            virtual Status TryGetDeviceContext(DeviceContext** out_context) {
+                *out_context = nullptr;
+                return Status::OK();
+            }
             virtual bool IsLocal() const { return true; }
         private:
             DeviceNameUtils::ParsedName parsed_name_;

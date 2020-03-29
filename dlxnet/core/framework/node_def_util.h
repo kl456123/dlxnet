@@ -49,6 +49,9 @@ namespace dlxnet{
 
     };
 
+    // Return true if the attr with the name attr_name is defined in node_def.
+    bool HasNodeAttr(const NodeDef& node_def, StringPiece attr_name);
+
     void AddDefaultsToNodeDef(const OpDef& op_def, NodeDef* node_def);
 
     void AddNodeAttr(StringPiece name, const AttrValue& value, NodeDef* node_def);
@@ -93,6 +96,12 @@ namespace dlxnet{
             DataType* value);// type: "DataType"
     Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
             const TensorProto** value);
+
+    // Produces a formatted string pattern from the node which can uniquely identify
+    // this node upstream to produce an informative error message. The pattern
+    // followed is: {{node <node_name>}}
+    string FormatNodeForError(const Node& node);
+    string FormatNodeDefForError(const NodeDef& node_def);
 
 
 }

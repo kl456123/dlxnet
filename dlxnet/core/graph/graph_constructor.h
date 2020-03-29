@@ -34,6 +34,12 @@ namespace dlxnet{
     Status ConvertGraphDefToGraph(const GraphConstructorOptions& opts,
             GraphDef&& gdef, Graph* g);
 
+
+    // Make a copy of "src" into "*dest".
+    //
+    // REQUIRES: "*dest" is a freshly allocated graph without any nodes or edges
+    // other than the implicit Source/Sink nodes.
+    extern void CopyGraph(const Graph& src, Graph* dest);
 }
 
 

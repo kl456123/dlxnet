@@ -235,6 +235,7 @@ namespace dlxnet{
                 int o = *ready_.begin();
                 ready_.erase(ready_.begin());
                 ++processed;
+                inputs.clear();
                 NodeDef node_def = consume_node_def(o);
 
                 // generate inputs
@@ -370,4 +371,9 @@ namespace dlxnet{
         return GraphConstructor::Construct(opts, std::move(gdef), g, &refiner);
     }
 
-}
+    void CopyGraph(const Graph& src, Graph* dest) {
+        // here we just do shadow copy
+        dest = const_cast<Graph*>(&src);
+    }
+
+}// namespace dlxnet

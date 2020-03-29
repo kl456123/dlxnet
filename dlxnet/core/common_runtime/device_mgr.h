@@ -13,6 +13,7 @@
 #include "dlxnet/core/platform/types.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
 #include  "dlxnet/core/platform/hash.h"
+#include "dlxnet/core/lib/core/arena.h"
 
 
 namespace dlxnet{
@@ -67,9 +68,11 @@ namespace dlxnet{
             void ClearContainers(gtl::ArraySlice<string> containers) const override;
             int NumDeviceType(const string& type) const override;
         private:
+            StringPiece CopyToBackingStore(StringPiece s);
             std::unordered_map<StringPiece, Device*, StringPieceHasher> device_map_;
             const std::vector<std::unique_ptr<Device>> devices_;
             std::unordered_map<string, int> device_type_counts_;
+            core::Arena name_backing_store_;  // Storage for keys in device_map_
             TF_DISALLOW_COPY_AND_ASSIGN(StaticDeviceMgr);
     };
 

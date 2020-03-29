@@ -4,17 +4,17 @@
 namespace dlxnet{
     DeviceMgr::~DeviceMgr() {}
     StaticDeviceMgr::StaticDeviceMgr(std::vector<std::unique_ptr<Device>> devices)
-        :devices_(std::move(devices)){
+        :devices_(std::move(devices)), name_backing_store_(128){
             for (auto& d : devices_) {
                 for (const string& name :
                         DeviceNameUtils::GetNamesForDeviceMappings(d->parsed_name())) {
-                    device_map_[name] = d.get();
+                    device_map_[CopyToBackingStore(name)] = d.get();
                 }
 
                 // Register under the (3) local name and (4) legacy local name.
                 for (const string& name :
                         DeviceNameUtils::GetLocalNamesForDeviceMappings(d->parsed_name())) {
-                    device_map_[name] = d.get();
+                    device_map_[CopyToBackingStore(name)] = d.get();
                 }
 
                 device_type_counts_[d->device_type()]++;
@@ -88,20 +88,27 @@ namespace dlxnet{
         return 0;
     }
 
+    StringPiece StaticDeviceMgr::CopyToBackingStore(StringPiece s) {
+        size_t n = s.size();
+        char* space = static_cast<char*>(name_backing_store_.Alloc(n));
+        memcpy(space, s.data(), n);
+        return StringPiece(space, n);
+    }
+
     void StaticDeviceMgr::ClearContainers(
             gtl::ArraySlice<string> containers) const {
         Status s;
         for (const auto& dev : devices_) {
             // if (containers.empty()) {
-                // s.Update(dev->resource_manager()->Cleanup(
-                            // dev->resource_manager()->default_container()));
+            // s.Update(dev->resource_manager()->Cleanup(
+            // dev->resource_manager()->default_container()));
             // } else {
-                // for (const string& c : containers) {
-                    // s.Update(dev->resource_manager()->Cleanup(c));
-                // }
+            // for (const string& c : containers) {
+            // s.Update(dev->resource_manager()->Cleanup(c));
+            // }
             // }
             // if (!s.ok()) {
-                // LOG(WARNING) << s;
+            // LOG(WARNING) << s;
             // }
         }
     }

@@ -21,6 +21,9 @@ limitations under the License.
 #include "dlxnet/core/platform/logging.h"
 
 namespace dlxnet{
+    string DeviceTypeString(const DeviceType& device_type) {
+        return device_type.type();
+    }
     bool DeviceType::operator<(const DeviceType& other) const {
         return type_ < other.type_;
     }

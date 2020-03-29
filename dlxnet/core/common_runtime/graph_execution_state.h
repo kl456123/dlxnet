@@ -7,6 +7,7 @@
 #include "dlxnet/core/lib/status.h"
 #include "dlxnet/core/framework/graph.pb.h"
 #include "dlxnet/core/public/session_options.h"
+#include "dlxnet/core/common_runtime/build_graph_options.h"
 
 
 
@@ -38,11 +39,30 @@ namespace dlxnet{
             static Status MakeForPrunedGraph(
                     GraphDef&& graph_def, const GraphExecutionStateOptions& options,
                     std::unique_ptr<GraphExecutionState>* out_state);
-            Status InitBaseGraph(std::unique_ptr<Graph>&& graph);
+
+            // Builds a ClientGraph (a sub-graph of the full graph as induced by
+            // the Node set specified in "options").  If successful, returns OK
+            // and the caller takes the ownership of "*out". Otherwise, returns
+            // an error.
+            Status BuildGraph(const BuildGraphOptions& options,
+                    std::unique_ptr<Graph>* out);
+
+            // The graph returned by BuildGraph may contain only the pruned
+            // graph, whereas some clients may want access to the full graph.
+            const Graph* full_graph() { return graph_; }
+
         private:
             GraphExecutionState(std::unique_ptr<GraphDef>&& graph_def,
                     const GraphExecutionStateOptions& options);
 
+            // Extract the subset of the graph that needs to be run, adding feed/fetch
+            // ops as needed.
+            Status PruneGraph(const BuildGraphOptions& options, Graph* graph);
+
+            Status OptimizeGraph(
+                    const BuildGraphOptions& options, std::unique_ptr<Graph>* optimized_graph);
+
+            Status InitBaseGraph(std::unique_ptr<Graph>&& graph);
 
             const std::unique_ptr<GraphDef> original_graph_def_;
 

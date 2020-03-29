@@ -6,6 +6,7 @@
 namespace dlxnet{
     struct BuildGraphOptions{
         CallableOptions callable_options;
+        string DebugString() const;
     };
 }
 

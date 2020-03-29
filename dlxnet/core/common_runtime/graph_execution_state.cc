@@ -41,14 +41,79 @@ namespace dlxnet{
         session_handle_(options.session_handle),
         graph_(nullptr) {}
 
-    Status GraphExecutionState::InitBaseGraph(std::unique_ptr<Graph>&& graph){
+    Status GraphExecutionState::InitBaseGraph(std::unique_ptr<Graph>&& new_graph){
         // pre optimize
+        GraphOptimizationPassOptions optimization_options;
+        optimization_options.session_handle = session_handle_;
+        optimization_options.session_options = session_options_;
+        optimization_options.graph = &new_graph;
+        optimization_options.device_set = device_set_;
+
+        TF_RETURN_IF_ERROR(OptimizationPassRegistry::Global()->RunGrouping(
+                    OptimizationPassRegistry::PRE_PLACEMENT, optimization_options));
         // placement
         Placer placer;
         TF_RETURN_IF_ERROR(placer.Run());
         // post optimize
+        TF_RETURN_IF_ERROR(OptimizationPassRegistry::Global()->RunGrouping(
+                    OptimizationPassRegistry::POST_PLACEMENT, optimization_options));
 
-        graph_ = graph.release();
+        graph_ = new_graph.release();
         return Status::OK();
+    }
+
+    Status GraphExecutionState::BuildGraph(const BuildGraphOptions& options,
+            std::unique_ptr<Graph>* out){
+
+        VLOG(1) << "BuildGraph";
+        const uint64 start_time_usecs = Env::Default()->NowMicros();
+        if (!graph_) {
+            // It is only valid to call this method directly when the original graph
+            // was created with the option `place_pruned_graph == false`.
+            return errors::Internal(
+                    "Attempted to prune a graph that has not been fully initialized.");
+        }
+
+        // Grappler optimization might change the structure of a graph itself, and
+        // also it can add/prune functions to/from the library.
+        std::unique_ptr<Graph> optimized_graph;
+        Status s = OptimizeGraph(options, &optimized_graph);
+        if(!s.ok()){
+            VLOG(2) << "Grappler optimization failed. Error: " << s.error_message();
+            // Simply copy the original graph and the function library if we couldn't
+            // optimize it.
+            optimized_graph.reset(new Graph(OpRegistry::Global()));
+            CopyGraph(*graph_, optimized_graph.get());
+        }
+
+        // prune graph
+        TF_RETURN_IF_ERROR(
+                PruneGraph(options, optimized_graph.get()));
+
+        // TODO(andydavis): Clarify optimization pass requirements around CostModel.
+        GraphOptimizationPassOptions optimization_options;
+        optimization_options.session_options = session_options_;
+        optimization_options.graph = &optimized_graph;
+        optimization_options.device_set = device_set_;
+
+        TF_RETURN_IF_ERROR(OptimizationPassRegistry::Global()->RunGrouping(
+                    OptimizationPassRegistry::POST_REWRITE_FOR_EXEC, optimization_options));
+
+        *out = std::move(optimized_graph);
+        return Status::OK();
+    }
+
+    Status GraphExecutionState::PruneGraph(
+            const BuildGraphOptions& options, Graph* graph) {
+        return Status::OK();
+    }
+
+    Status GraphExecutionState::OptimizeGraph(
+            const BuildGraphOptions& options, std::unique_ptr<Graph>* optimized_graph) {
+        if (session_options_->config.graph_options().place_pruned_graph()) {
+            return errors::InvalidArgument("Can't optimize a pruned graph");
+        }
+        // use grappler
+        return errors::InvalidArgument("Meta Optimizer disabled");
     }
 }

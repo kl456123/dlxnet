@@ -24,6 +24,8 @@ Status TestMatMul(){
     auto matmul_attrs = MatMul::Attrs().TransposeA(false).TransposeB(false);
     auto m = MatMul(root, a, b, matmul_attrs);
 
+    auto m2 = MatMul(root, m, b);
+
     // This runs the GraphDef network definition that we've just constructed, and
     // returns the results in the output tensor.
     dlxnet::GraphDef graph;

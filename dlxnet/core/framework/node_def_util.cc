@@ -7,6 +7,7 @@
 
 namespace dlxnet{
     namespace {
+
         // note that sig refers to types_vector
         Status AddArgToSig(const NodeDef& node_def,
                 const OpDef::ArgDef& arg_def, DataTypeVector* sig){
@@ -62,7 +63,9 @@ namespace dlxnet{
         }
     } // namespace
 
-
+    bool HasNodeAttr(const NodeDef& node_def, StringPiece attr_name) {
+        return node_def.attr().find(string(attr_name)) != node_def.attr().end();
+    }
     void AddDefaultsToNodeDef(const OpDef& op_def, NodeDef* node_def){
         for(const auto& attr_def: op_def.attr()){
             AttrSlice attrs(*node_def);
@@ -291,6 +294,13 @@ namespace dlxnet{
         TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, "tensor"));
         *value = &attr_value->tensor();
         return Status::OK();
+    }
+
+    string FormatNodeForError(const Node& node){
+        return node.name();
+    }
+    string FormatNodeDefForError(const NodeDef& node_def){
+        return node_def.name();
     }
 
 }// namespace dlxnet

@@ -1,6 +1,10 @@
 #ifndef DLXNET_CORE_FRAMEWORK_FUNCTION_H_
 #define DLXNET_CORE_FRAMEWORK_FUNCTION_H_
 #include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/framework/tensor.h"
+#include "dlxnet/core/lib/gtl/inlined_vector.h"
+#include "dlxnet/core/lib/gtl/array_slice.h"
+#include "dlxnet/core/framework/types.h"
 
 namespace dlxnet{
     class CallFrameInterface {
@@ -25,6 +29,7 @@ namespace dlxnet{
             FunctionCallFrame(DataTypeSlice arg_types, DataTypeSlice ret_types);
             ~FunctionCallFrame() override;
 
+            // used outside
             // Caller methods.
             Status SetArgs(gtl::ArraySlice<Tensor> args);
             Status GetRetvals(std::vector<Tensor>* rets) const;
@@ -36,6 +41,7 @@ namespace dlxnet{
             size_t num_args() const override { return arg_types_.size(); }
             size_t num_retvals() const override { return ret_types_.size(); }
 
+            // internal used
             // Callee methods.
             Status GetArg(int index, Tensor* val) const override;
             Status SetRetval(int index, const Tensor& val) override;

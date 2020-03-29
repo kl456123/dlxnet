@@ -442,6 +442,18 @@ namespace dlxnet{
         return incoming_ ? e->src() : e->dst();
     }
 
+    inline gtl::iterator_range<NodeIter> Graph::nodes() const {
+        // Note that NodeId 0 is always valid since we don't let the source
+        // node be removed from the graph.
+        return gtl::make_range(NodeIter(this, 0), NodeIter(this, num_node_ids()));
+    }
+
+    inline gtl::iterator_range<NodeIter> Graph::op_nodes() const {
+        // the same as nodes() due to ignore sink and source node
+        return gtl::make_range(NodeIter(this, 0), NodeIter(this, num_node_ids()));
+    }
+
+
     // node set device_name
     inline void Node::set_assigned_device_name_index(int index) {
         graph_->CheckDeviceNameIndex(index);

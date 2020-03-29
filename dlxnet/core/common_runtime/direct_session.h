@@ -16,6 +16,7 @@
 #include "dlxnet/core/graph/graph.h"
 #include "dlxnet/core/framework/function.h"
 #include "dlxnet/core/framework/session_state.h"
+#include "dlxnet/core/framework/types.h"
 
 namespace dlxnet{
     class DirectSessionFactory;
@@ -76,6 +77,14 @@ namespace dlxnet{
             };
             struct ExecutorsAndKeys{
                 std::vector<PerPartitionExecutorsAndLib> items;
+                std::unordered_map<string, size_t> input_name_to_index;
+                std::unordered_map<string, size_t> output_name_to_index;
+                DataTypeVector input_types;
+                DataTypeVector output_types;
+
+                CallableOptions callable_options;
+                // useless
+                int64 collective_graph_key = -1;
             };
             // Retrieves an already existing set of executors to run 'inputs' and
             // 'outputs', or creates and caches them for future use.
@@ -83,6 +92,8 @@ namespace dlxnet{
                     gtl::ArraySlice<string> inputs, gtl::ArraySlice<string> outputs,
                     gtl::ArraySlice<string> target_nodes,
                     ExecutorsAndKeys** executors_and_keys);
+
+
 
             // Creates a set of executors to run the subgraph defined by
             // `callable_options`.
@@ -165,6 +176,9 @@ namespace dlxnet{
             // For generating unique names for this session instance.
             std::atomic<int64> edge_name_counter_ = {0};
             std::atomic<int64> handle_name_counter_ = {0};
+
+            // For generating step ids that are unique among all sessions.
+            static std::atomic_int_fast64_t step_id_counter_;
             // Run in caller's thread if RunOptions.inter_op_thread_pool is negative or
             // all of following conditions are met:
             // 1. This session doesn't own any thread pool.
