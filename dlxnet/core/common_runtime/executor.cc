@@ -9,6 +9,16 @@
 
 namespace dlxnet{
     class ExecutorImpl;
+    class GraphView;
+    class NodeItem;
+
+    struct EdgeInfo {
+        int dst_id;
+        int output_slot : 31;
+        // true if this is the last info for output_slot in the EdgeInfo list.
+        bool is_last : 1;
+        int input_slot;
+    };
 
     // Compact structure representing a graph node and its associated kernel.
     //
@@ -37,6 +47,27 @@ namespace dlxnet{
         // Number of output edges.
         size_t num_output_edges;
 
+        const EdgeInfo* output_edge_list() const { return output_edge_base(); }
+
+        // ith output edge.
+        const EdgeInfo& output_edge(int i) const {
+            DCHECK_GE(i, 0);
+            DCHECK_LT(i, num_output_edges);
+            return output_edge_base()[i];
+        }
+
+        DataType input_type(int i) const {
+            DCHECK_LT(i, num_inputs);
+            return static_cast<DataType>(input_type_base()[i]);
+        }
+        DataType output_type(int i) const {
+            DCHECK_LT(i, num_outputs);
+            return static_cast<DataType>(output_type_base()[i]);
+        }
+
+        // Return array of per-output allocator attributes.
+        const AllocatorAttributes* output_attr_list() const { return output_attr_base(); }
+
         string DebugString() const {
             string ret = strings::StrCat("{name:'", kernel->name(), "' id:", node_id);
             if (is_source) {
@@ -49,14 +80,49 @@ namespace dlxnet{
             return ret;
         }
 
+
         private:
+        friend class GraphView;
+
+        uint8* input_type_base()const{
+            return const_cast<uint8*>(input_types.data());
+        }
+        uint8* output_type_base()const{
+            return const_cast<uint8*>(output_types.data());
+        }
+
+        AllocatorAttributes* output_attr_base()const{
+            return const_cast<AllocatorAttributes*>(output_attrs.data());
+        }
+        EdgeInfo* output_edge_base()const{
+            return const_cast<EdgeInfo*>(output_edges.data());
+        }
+        std::vector<uint8> input_types;
+        std::vector<uint8> output_types;
+        std::vector<AllocatorAttributes> output_attrs;
+        std::vector<EdgeInfo> output_edges;
         TF_DISALLOW_COPY_AND_ASSIGN(NodeItem);
+    };
+
+    class GraphView{
+        public:
+            GraphView(){};
+            ~GraphView();
+            void Initialize(const Graph* g);
+            NodeItem* node(size_t id)const{
+                return node_items_[id];
+            }
+            int32 num_nodes() const { return node_items_.size(); }
+        private:
+            std::vector<NodeItem*> node_items_;
+            void InitializeNode(NodeItem* node_item, const Node* n);
+            TF_DISALLOW_COPY_AND_ASSIGN(GraphView);
     };
 
     // ExecutorImpl
     class ExecutorImpl: public Executor{
         public:
-            explicit ExecutorImpl(const LocalExecutorParams& p) : params_(p){
+            explicit ExecutorImpl(const LocalExecutorParams& p) : params_(p), gview_(){
                 CHECK(p.create_kernel != nullptr);
                 CHECK(p.delete_kernel != nullptr);
             }
@@ -68,7 +134,7 @@ namespace dlxnet{
 
             // Owned.
             LocalExecutorParams params_;
-            // GraphView gview_;
+            GraphView gview_;
 
             // Root nodes (with no in edges) that should form the initial ready queue
             std::vector<const NodeItem*> root_nodes_;
@@ -259,12 +325,22 @@ namespace dlxnet{
             // nodes in 'ready' into 'inline_ready'.
             void ScheduleReady(const TaggedNodeSeq& ready,
                     TaggedNodeReadyQueue* inline_ready);
+
+            // Clean up when this executor is done.
+            void Finish();
+            void ScheduleFinish();
     };
 
     ExecutorState::~ExecutorState(){
         if (device_context_) {
             device_context_->Unref();
         }
+    }
+    void ExecutorState::Finish(){
+    }
+
+    void ExecutorState::ScheduleFinish(){
+        Finish();
     }
 
     void ExecutorState::Process(TaggedNode tagged_node){
@@ -294,11 +370,80 @@ namespace dlxnet{
         // Set the device_context for this device, if it exists.
         params.op_device_context = device_context_;
 
-        inline_ready.push_back(tagged_node);
-        while(!inline_ready.empty()){
-            // device->Compute();
-        }
 
+        Status s;
+        inline_ready.push_back(tagged_node);
+        EntryVector outputs;
+        bool completed = false;
+        while(!inline_ready.empty()){
+            tagged_node = inline_ready.front();
+            inline_ready.pop_front();
+            const NodeItem& item = *tagged_node.node_item;
+            const int id = item.node_id;
+
+            if (vlog_) {
+                VLOG(1) << "Process node: " << id << " step " << params.step_id << " "
+                    << SummarizeNodeDef(item.kernel->def())
+                    << (tagged_node.is_dead ? " is dead" : "")
+                    << " device: " << device->name();
+            }
+            outputs.clear();outputs.clear();outputs.clear();
+            DeviceContext* device_context = nullptr;
+            bool launched_asynchronously;
+
+            // Prepares inputs.
+            bool is_input_dead = false;
+            // s = PrepareInputs(item, first_input, &inputs, &input_alloc_attrs,
+            // &is_input_dead);
+
+            if (!s.ok()) {
+                // Clear inputs.
+                int num_inputs = item.num_inputs;
+                for (int i = 0; i < num_inputs; ++i) {
+                    // (first_input + i)->ClearVal();
+                }
+                // MaybeMarkCompleted(input_frame, input_iter, item);
+                // Continue to process the nodes in 'inline_ready'.
+                completed = NodeDone(s, ready, &inline_ready);
+                continue;
+            }
+
+            // Set up compute params.
+            OpKernel* op_kernel = item.kernel;
+            params.op_kernel = op_kernel;
+            params.is_input_dead = is_input_dead;
+            params.output_attr_array = item.output_attr_list();
+            if (item.kernel_is_async) {
+                // Asynchronous computes.
+                launched_asynchronously = true;
+                // not supported now
+            }else{
+                // Synchronous computes.
+                OpKernelContext ctx(&params, item.num_outputs);
+                device->Compute(op_kernel, &ctx);
+                s = ProcessOutputs(item, &ctx, &outputs);
+                device_context = ctx.op_device_context();
+            }
+
+            if (!launched_asynchronously) {
+                if (vlog_) {
+                    VLOG(2) << "Synchronous kernel done: " << id << " step "
+                        << params.step_id << " " << SummarizeNodeDef(item.kernel->def())
+                        << (tagged_node.is_dead ? " is dead: " : "")
+                        << " device: " << device->name();
+                }
+
+                // Propagates outputs.
+                if (s.ok()) {
+                    PropagateOutputs(tagged_node, &item, &outputs, &ready);
+                }
+                outputs.clear();
+                // Postprocess.
+                completed = NodeDone(s, ready, &inline_ready);
+            }
+        }// while !inline_ready.empty()
+        // This thread of computation is done if completed = true.
+        if (completed) ScheduleFinish();
     }
 
     void ExecutorState::RunAsync(Executor::DoneCallback done){
@@ -328,6 +473,15 @@ namespace dlxnet{
             ScheduleReady(ready, nullptr);
         }
     }
+
+    void ExecutorState::PropagateOutputs(const TaggedNode& tagged_node, const NodeItem* item,
+            EntryVector* outputs, TaggedNodeSeq* ready){
+    }
+    bool ExecutorState::NodeDone(const Status& s, const TaggedNodeSeq& ready,
+            TaggedNodeReadyQueue* inline_ready){}
+
+    Status ExecutorState::ProcessOutputs(const NodeItem& item, OpKernelContext* ctx,
+            EntryVector* outputs){}
 
     void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
             TaggedNodeReadyQueue* inline_ready){
@@ -391,8 +545,28 @@ namespace dlxnet{
     Status ExecutorImpl::Initialize(const Graph& graph){
         // Preprocess every node in the graph to create an instance of op
         // kernel for each node.
+        gview_.Initialize(&graph);
         for (const Node* n : graph.nodes()) {
             const int id = n->id();
+            NodeItem* item = gview_.node(id);
+            item->node_id = id;
+
+            Status s = params_.create_kernel(params_.device, n->def(), &item->kernel);
+            if (!s.ok()) {
+                item->kernel = nullptr;
+                LOG(ERROR) << "Executor failed to create kernel. " << s;
+                return s;
+            }
+
+            CHECK(item->kernel);
+            item->kernel_is_async = (item->kernel->AsAsync() != nullptr);
+            item->is_source = IsSource(n);
+            item->is_sink = IsSink(n);
+
+            // See if this node is a root node, and if so, add item to root_nodes_.
+            if (n->in_edges().empty()) {
+                root_nodes_.push_back(item);
+            }
         }
         return Status::OK();
     }
@@ -401,7 +575,81 @@ namespace dlxnet{
         (new ExecutorState(args, this))->RunAsync(std::move(done));
     }
 
-    // implement details
+    // GraphView
+    GraphView::~GraphView() {
+        for(NodeItem* item: node_items_){
+            delete item;
+        }
+    }
+    void GraphView::InitializeNode(NodeItem* item, const Node* n){
+        // allocate memory first
+        CHECK_NOTNULL(item);
+
+        const size_t num_output_edges = n->out_edges().size();
+        const int num_inputs = n->num_inputs();
+        const int num_outputs = n->num_outputs();
+
+        item->num_inputs = num_inputs;
+        item->num_outputs = num_outputs;
+        item->num_output_edges = num_output_edges;
+
+        // init input and output types
+        // Fill output edges.
+        // Keep track of the last EdgeInfo in the EdgeInfo array that references
+        // a given output slot.  For all but the last, we need to do a copy of the
+        // Tensor when propagating results downstream in the graph, but for the
+        // last one, we can just do a move of the Tensor object to propagate it.
+        gtl::InlinedVector<EdgeInfo*, 4> last_indices(num_outputs, nullptr);
+        item->output_edges.reserve(num_output_edges);
+        EdgeInfo* dst_edge = item->output_edge_base();
+        for (auto e : n->out_edges()) {
+            dst_edge->dst_id = e->dst()->id();
+            CHECK_LE(e->src_output(), 0x3FFFFFFF);  // Must fit in 31 bits
+            dst_edge->output_slot = e->src_output();
+            dst_edge->is_last = false;
+            const int output_slot = dst_edge->output_slot;
+            if (output_slot >= 0) {
+                last_indices[output_slot] = dst_edge;
+            }
+            dst_edge->input_slot = e->dst_input();
+            dst_edge++;
+        }
+
+        for (EdgeInfo* edge_info : last_indices) {
+            if (edge_info != nullptr) {
+                edge_info->is_last = true;
+            }
+        }
+
+        item->output_attrs.reserve(num_outputs);
+        item->input_types.reserve(num_inputs);
+        item->output_types.reserve(num_outputs);
+
+        AllocatorAttributes* output_attrs = item->output_attr_base();
+        for (int i = 0; i < num_outputs; i++) {
+            new (&item->output_attrs[i]) AllocatorAttributes();
+        }
+
+        DCHECK_LT(DataType_MAX, 255);  // Must fit in uint8
+        uint8* input_types = item->input_type_base();
+        for (int i = 0; i < num_inputs; i++) {
+            item->input_types[i] = static_cast<uint8>(n->input_type(i));
+            DCHECK_EQ(item->input_type(i), n->input_type(i));
+        }
+        for (int i = 0; i < num_outputs; ++i) {
+            item->output_types[i] = static_cast<uint8>(n->output_type(i));
+            DCHECK_EQ(item->output_type(i), n->output_type(i));
+        }
+    }
+
+    void GraphView::Initialize(const Graph* g){
+        for(const Node* n:g->nodes()){
+            node_items_.push_back(new NodeItem);
+            InitializeNode(node_items_.back(), n);
+        }
+    }
+
+
 
     Status NewLocalExecutor(const LocalExecutorParams& params, const Graph& graph,
             Executor** executor) {
@@ -415,8 +663,7 @@ namespace dlxnet{
         return s;
     }
 
-    Status CreateNonCachedKernel(Device* device, const NodeDef& ndef, int graph_def_version,
-            OpKernel** kernel) {
+    Status CreateNonCachedKernel(Device* device, const NodeDef& ndef, OpKernel** kernel) {
         const auto device_type = DeviceType(device->attributes().device_type());
         auto allocator = device->GetAllocator(AllocatorAttributes());
         return CreateOpKernel(device_type, device, allocator, ndef, kernel);

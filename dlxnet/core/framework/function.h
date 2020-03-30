@@ -2,9 +2,10 @@
 #define DLXNET_CORE_FRAMEWORK_FUNCTION_H_
 #include "dlxnet/core/lib/status.h"
 #include "dlxnet/core/framework/tensor.h"
+#include "dlxnet/core/framework/types.h"
+#include "dlxnet/core/framework/op.h"
 #include "dlxnet/core/lib/gtl/inlined_vector.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
-#include "dlxnet/core/framework/types.h"
 
 namespace dlxnet{
     class CallFrameInterface {
@@ -57,6 +58,26 @@ namespace dlxnet{
             gtl::InlinedVector<Retval, 4> rets_;
 
             TF_DISALLOW_COPY_AND_ASSIGN(FunctionCallFrame);
+    };
+
+    // Just A Functions Container
+    // Helper to maintain a map between function names in a given
+    // FunctionDefLibrary and function definitions.
+    //
+    // This class is thread-safe.
+    class FunctionLibraryDefinition : public OpRegistryInterface {
+        public:
+            // Ops created for function arguments bear the name given by `kArgOp`; those
+            // created for return values bear the name given by `kRetOp`.
+            static constexpr const char* const kArgOp = "_Arg";
+            static constexpr const char* const kDeviceArgOp = "_DeviceArg";
+            static constexpr const char* const kRetOp = "_Retval";
+            static constexpr const char* const kDeviceRetOp = "_DeviceRetval";
+            static constexpr const char* const kIntsOnDeviceAttr =
+                "experimental_ints_on_device";
+
+            static constexpr const char* const kGradientOp = "SymbolicGradient";
+            static constexpr const char* const kFuncAttr = "f";
     };
 }
 

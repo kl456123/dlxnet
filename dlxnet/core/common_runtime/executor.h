@@ -58,7 +58,7 @@ namespace dlxnet{
         // create_kernel returns an instance of op kernel based on NodeDef.
         // delete_kernel is called for every kernel used by the executor
         // when the executor is deleted.
-        std::function<Status(const NodeDef&, OpKernel**)> create_kernel;
+        std::function<Status(Device* device, const NodeDef&, OpKernel**)> create_kernel;
         std::function<void(OpKernel*)> delete_kernel;
     };
     ::dlxnet::Status NewLocalExecutor(const LocalExecutorParams& params,
@@ -69,8 +69,7 @@ namespace dlxnet{
     // Creates a kernel based on "ndef" on device "device". The kernel can
     // access the functions in the "flib". The caller takes ownership of
     // returned "*kernel".
-    Status CreateNonCachedKernel(Device* device, const NodeDef& ndef,
-            int graph_def_version, OpKernel** kernel);
+    Status CreateNonCachedKernel(Device* device, const NodeDef& ndef, OpKernel** kernel);
 
     // Deletes "kernel" returned by CreateKernel.
     void DeleteNonCachedKernel(OpKernel* kernel);

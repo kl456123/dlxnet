@@ -76,5 +76,24 @@ namespace dlxnet{
 
         string InferenceContext::DebugString() const{
         }
+
+        Status InferenceContext::MakeShapeFromShapeProto(const TensorShapeProto& proto,
+                ShapeHandle* out) {
+            *out = nullptr;
+            TensorShape shape(proto);
+            const int num_dims = shape.dims();
+            std::vector<DimensionHandle> dims(num_dims);
+            for (int i = 0; i < num_dims; ++i) {
+                dims[i] = MakeDim(shape.dim_size(i));
+            }
+            *out = MakeShape(dims);
+            return Status::OK();
+
+        }
+        ShapeHandle InferenceContext::UnknownShape() {
+            all_shapes_.push_back(new Shape());
+            return all_shapes_.back();
+        }
+
     }
 }

@@ -465,9 +465,9 @@ namespace dlxnet{
             // build executor
             LocalExecutorParams params;
             params.device = device;
-            params.create_kernel = [this](const NodeDef& ndef,
+            params.create_kernel = [this](Device* device, const NodeDef& ndef,
                     OpKernel** kernel) {
-                return Status::OK();
+                return CreateNonCachedKernel(device, ndef, kernel);
                 // NOTE(mrry): We must not share function kernels (implemented
                 // using `CallOp`) between subgraphs, because `CallOp::handle_`
                 // is tied to a particular subgraph. Even if the function itself

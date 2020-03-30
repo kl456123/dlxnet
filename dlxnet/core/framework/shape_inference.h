@@ -101,6 +101,9 @@ namespace dlxnet{
                 // Describes the whole context, for debugging purposes.
                 string DebugString() const;
 
+                ShapeHandle UnknownShape();
+                AttrSlice attrs() const { return AttrSlice(node_def_); }
+
                 // Look up the attr for the NodeDef being evaluated with name attr_name and
                 // set *value to its value.  If no attr with attr_name is found in def(), or
                 // the attr does not have a matching type, a non-ok status will be returned.
@@ -110,6 +113,8 @@ namespace dlxnet{
                 // Returns a new shape with the given dims. The returned value is owned by
                 // this context.
                 ShapeHandle MakeShape(const std::vector<DimensionHandle>& dims);
+                Status MakeShapeFromShapeProto(const TensorShapeProto& proto,
+                        ShapeHandle* out);
 
                 // Returns a new dimension of the given size.  The returned value is owned by
                 // this context.

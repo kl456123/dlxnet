@@ -359,6 +359,9 @@ namespace dlxnet{
             core::Arena arena_;
             TF_DISALLOW_COPY_AND_ASSIGN(Graph);
     };
+    inline bool IsSource(const Node* node) { return node->IsSource(); }
+    inline bool IsSink(const Node* node) { return node->IsSink(); }
+
 
     class NodeIter : public std::iterator<std::forward_iterator_tag, Node, std::ptrdiff_t,
     /*Pointer*/ Node*, /*Reference*/ Node*>{
