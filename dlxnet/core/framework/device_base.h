@@ -72,6 +72,19 @@ namespace dlxnet{
             virtual thread::ThreadPool* tensorflow_device_thread_pool() {
                 return device_thread_pool_;
             }
+
+            // Materializes the given TensorProto into 'tensor' stored in Device
+            // memory.  Most devices will want to override this.
+            //
+            // TODO(vrv): We should be able to put this function into
+            // OpKernelContext and handle the copies from device memory via send
+            // and receive nodes, instead of requiring that each device handle
+            // the copies here as well as in copy ops.
+            virtual Status MakeTensorFromProto(const TensorProto& tensor_proto,
+                    const AllocatorAttributes alloc_attrs,
+                    Tensor* tensor) {
+                return errors::Internal("Device does not implement MakeTensorFromProto()");
+            }
         protected:
             // Does not take ownership.
             void set_tensorflow_device_thread_pool(thread::ThreadPool* thread_pool) {

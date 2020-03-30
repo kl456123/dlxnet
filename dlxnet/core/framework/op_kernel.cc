@@ -13,7 +13,7 @@
 #include "dlxnet/core/framework/device_attributes.pb.h"
 #include "dlxnet/core/framework/graph.pb.h"
 #include "dlxnet/core/framework/kernel_def.pb.h"
-// #include "dlxnet/core/framework/kernel_def_util.h"
+#include "dlxnet/core/framework/kernel_def_util.h"
 #include "dlxnet/core/framework/log_memory.h"
 // #include "dlxnet/core/framework/memory_types.h"
 #include "dlxnet/core/framework/node_def.pb.h"
@@ -709,7 +709,27 @@ namespace dlxnet{
             tf_shared_lock lock(typed_registry->mu);
             auto regs = typed_registry->registry.equal_range(key);
             for (auto iter = regs.first; iter != regs.second; ++iter) {
+                //check each match kernel, determine use which one
+                bool match;
+                TF_RETURN_IF_ERROR(KernelAttrsMatch(iter->second.def, node_attrs, &match));
+                if(match){
+                    if(*reg!=nullptr){
+                        // if multiple matched, find the one that has the max prior
+                        if ((*reg)->def.priority() == iter->second.def.priority()) {
+                            return errors::InvalidArgument(
+                                    "Multiple OpKernel registrations match NodeDef at the same "
+                                    "priority '",
+                                    node_name,
+                                    "': '", (*reg)->def.ShortDebugString(), "' and '",
+                                    iter->second.def.ShortDebugString(), "'");
+                        } else if ((*reg)->def.priority() > iter->second.def.priority()) {
+                            continue;
+                        }
+                    }
+                    *reg = &iter->second;
+                }
             }
+            // reg can be nullptr
 
             return Status::OK();
         }

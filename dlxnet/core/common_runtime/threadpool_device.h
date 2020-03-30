@@ -16,6 +16,10 @@ namespace dlxnet{
             Status Sync()override{
                 return Status::OK();
             }
+
+            Status MakeTensorFromProto(const TensorProto& tensor_proto,
+                    const AllocatorAttributes alloc_attrs,
+                    Tensor* tensor) override;
         private:
             Allocator* allocator_; // not owned, cpu allocator always exist in whole lifetime
 

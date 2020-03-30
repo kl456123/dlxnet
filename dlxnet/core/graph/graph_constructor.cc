@@ -166,8 +166,8 @@ namespace dlxnet{
                             "' does not specify an operation");
                 }
                 // if (node_def.device().empty()) {
-                    // return errors::InvalidArgument("Node '", node_def.name(),
-                            // "' is missing a device specification");
+                // return errors::InvalidArgument("Node '", node_def.name(),
+                // "' is missing a device specification");
                 // }
             }
             return Status::OK();
@@ -373,7 +373,21 @@ namespace dlxnet{
 
     void CopyGraph(const Graph& src, Graph* dest) {
         // here we just do shadow copy
-        dest = const_cast<Graph*>(&src);
+        // dest = const_cast<Graph*>(&src);
+
+        // Copy the nodes.
+        // "Node in src" -> "Node in *dest"
+        gtl::FlatMap<const Node*, Node*> node_map;
+        for (Node* n : src.op_nodes()) {
+            node_map[n] = dest->CopyNode(n);
+        }
+
+        // Copy the edges
+        for (const Edge* e : src.edges()) {
+            Node* src_copy = node_map[e->src()];
+            Node* dst_copy = node_map[e->dst()];
+            dest->AddEdge(src_copy, e->src_output(), dst_copy, e->dst_input());
+        }
     }
 
 }// namespace dlxnet

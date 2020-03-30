@@ -205,6 +205,13 @@ namespace dlxnet{
                         skip_empty();
                         return *this;
                     }
+                    bool operator==(const const_iterator& other) const {
+                        return iter_ == other.iter_;
+                    }
+
+                    bool operator!=(const const_iterator& other) const {
+                        return iter_ != other.iter_;
+                    }
 
                     value_type operator*() { return *iter_; }
 
@@ -256,6 +263,8 @@ namespace dlxnet{
             // Generate new node name with the specified prefix that is unique
             // across this graph.
             string NewName(StringPiece prefix);
+
+            Node* CopyNode(const Node* node);
 
             // Access to the list of all nodes.  Example usage:
             //   for (Node* node : graph.nodes()) { ... }
