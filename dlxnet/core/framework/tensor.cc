@@ -6,6 +6,7 @@
 #include "dlxnet/core/framework/tensor.pb.h"
 #include "dlxnet/core/platform/tensor_coding.h"
 #include "dlxnet/core/platform/protobuf.h"
+#include "dlxnet/core/framework/log_memory.h"
 
 namespace dlxnet{
 
@@ -103,7 +104,6 @@ namespace dlxnet{
                             return nullptr;
                         }
                         port::CopyToArray(in, data);
-                        in->assign();
                         return buf;
                     }
                 // Memory usage.
@@ -158,6 +158,14 @@ namespace dlxnet{
                     TypedAllocator::Deallocate<T>(alloc_, static_cast<T*>(data()), elem_);
                 }
             }
+
+        void RefIfNonNull(core::RefCounted* buf) {
+            if (buf) buf->Ref();
+        }
+
+        void UnrefIfNonNull(core::RefCounted* buf) {
+            if (buf) buf->Unref();
+        }
     };// end namespace
 
 
@@ -348,34 +356,34 @@ namespace dlxnet{
         return FromProto(get_default_cpu_allocator(), proto);
     }
     bool Tensor::FromProto(Allocator* a, const TensorProto& proto){
-        // CHECK_NOTNULL(a);
-        // TensorBuffer* p = nullptr;
-        // if (!TensorShape::IsValid(proto.tensor_shape())) return false;
-        // if (proto.dtype() == DT_INVALID) return false;
-        // TensorShape shape(proto.tensor_shape());
-        // const int64 N = shape.num_elements();
-        // if (N > 0 && proto.dtype()) {
-        // bool dtype_error = false;
-        // if (!proto.tensor_content().empty()) {
-        // const auto& content = proto.tensor_content();
-        // CASES_WITH_DEFAULT(proto.dtype(), p = Helper<T>::Decode(a, content, N),
-        // dtype_error = true, dtype_error = true);
-        // } else {
-        // CASES_WITH_DEFAULT(proto.dtype(), p = FromProtoField<T>(a, proto, N),
-        // dtype_error = true, dtype_error = true);
-        // }
-        // if (dtype_error || p == nullptr) return false;
-        // }
-        // shape_ = shape;
-        // set_dtype(proto.dtype());
-        // UnrefIfNonNull(buf_);
-        // buf_ = p;
-        // // TODO(misard) add tracking of which kernels and steps are calling
-        // // FromProto.
-        // if (buf_ != nullptr && buf_->data() != nullptr && LogMemory::IsEnabled()) {
-        // LogMemory::RecordTensorAllocation("Unknown (from Proto)",
-        // LogMemory::UNKNOWN_STEP_ID, *this);
-        // }
+        CHECK_NOTNULL(a);
+        TensorBuffer* p = nullptr;
+        if (!TensorShape::IsValid(proto.tensor_shape())) return false;
+        if (proto.dtype() == DT_INVALID) return false;
+        TensorShape shape(proto.tensor_shape());
+        const int64 N = shape.num_elements();
+        if (N > 0 && proto.dtype()) {
+            bool dtype_error = false;
+            if (!proto.tensor_content().empty()) {
+                const auto& content = proto.tensor_content();
+                CASES_WITH_DEFAULT(proto.dtype(), p = Helper<T>::Decode(a, content, N),
+                        dtype_error = true, dtype_error = true);
+            } else {
+                CASES_WITH_DEFAULT(proto.dtype(), p = FromProtoField<T>(a, proto, N),
+                        dtype_error = true, dtype_error = true);
+            }
+            if (dtype_error || p == nullptr) return false;
+        }
+        shape_ = shape;
+        set_dtype(proto.dtype());
+        UnrefIfNonNull(buf_);
+        buf_ = p;
+        // TODO(misard) add tracking of which kernels and steps are calling
+        // FromProto.
+        if (buf_ != nullptr && buf_->data() != nullptr && LogMemory::IsEnabled()) {
+            LogMemory::RecordTensorAllocation("Unknown (from Proto)",
+                    LogMemory::UNKNOWN_STEP_ID, *this);
+        }
         return true;
     }
     void Tensor::AsProtoField(TensorProto* proto) const {

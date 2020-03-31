@@ -492,12 +492,21 @@ namespace dlxnet{
         set_output(start, tensor);
         return Status::OK();
     }
+
     void OpKernelContext::set_output(int index, const Tensor& tensor) {
         CHECK_GE(index, 0);
         CHECK_LT(index, outputs_.size());
         const DataType type = params_->op_kernel->output_type(index);
         CHECK(!IsRefType(type));
         CHECK_EQ(mutable_output(index), nullptr);
+
+        bool allocate_and_copy = false;
+        if(allocate_and_copy){
+            outputs_[index] = TensorValue(new Tensor(tensor));
+            if(track_allocations() && tensor.TotalBytes()>0){
+                // track allocation
+            }
+        }
     }
 
     void OpKernelContext::set_output_ref(int index, mutex* mu,

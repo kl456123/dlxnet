@@ -387,7 +387,7 @@ namespace dlxnet{
                     << (tagged_node.is_dead ? " is dead" : "")
                     << " device: " << device->name();
             }
-            outputs.clear();outputs.clear();outputs.clear();
+            outputs.clear();
             DeviceContext* device_context = nullptr;
             bool launched_asynchronously;
 
@@ -476,12 +476,32 @@ namespace dlxnet{
 
     void ExecutorState::PropagateOutputs(const TaggedNode& tagged_node, const NodeItem* item,
             EntryVector* outputs, TaggedNodeSeq* ready){
+        ready->clear();
+        // Propagates outputs along out edges, and puts newly ready nodes
+        // into the ready queue.
+        const int num_output_edges = item->num_output_edges;
+        const GraphView& gview = impl_->gview_;
+        const EdgeInfo* edges = item->output_edge_list();
+        for(size_t out_index=0;out_index<num_output_edges;++out_index){
+            const EdgeInfo& e = edges[out_index];
+            const int dst_id = e.dst_id;
+            const NodeItem* dst_item = gview.node(dst_id);
+
+            bool dst_ready = false;
+            bool dst_dead = false;
+
+            if(dst_ready){
+                ready->emplace_back(dst_item, dst_dead);
+            }
+        }
     }
     bool ExecutorState::NodeDone(const Status& s, const TaggedNodeSeq& ready,
             TaggedNodeReadyQueue* inline_ready){}
 
     Status ExecutorState::ProcessOutputs(const NodeItem& item, OpKernelContext* ctx,
-            EntryVector* outputs){}
+            EntryVector* outputs){
+        return Status::OK();
+    }
 
     void ExecutorState::ScheduleReady(const TaggedNodeSeq& ready,
             TaggedNodeReadyQueue* inline_ready){
@@ -648,7 +668,6 @@ namespace dlxnet{
             InitializeNode(node_items_.back(), n);
         }
     }
-
 
 
     Status NewLocalExecutor(const LocalExecutorParams& params, const Graph& graph,
