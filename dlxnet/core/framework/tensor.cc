@@ -1,8 +1,11 @@
 #include "dlxnet/core/framework/tensor.h"
 #include "dlxnet/core/framework/typed_allocator.h"
 #include "dlxnet/core/framework/types.h"
+#include "dlxnet/core/framework/type_traits.h"
 #include "dlxnet/core/framework/allocation_description.pb.h"
 #include "dlxnet/core/framework/tensor.pb.h"
+#include "dlxnet/core/platform/tensor_coding.h"
+#include "dlxnet/core/platform/protobuf.h"
 
 namespace dlxnet{
 
@@ -71,14 +74,70 @@ namespace dlxnet{
 
                     TF_DISALLOW_COPY_AND_ASSIGN(Buffer);
             };
+        void LogUnexpectedSize(int64 actual, int64 expected) {
+            LOG(ERROR) << "Input size was " << actual << " and expected " << expected;
+        }
         // A set of helper functions depending on T.
+        // used for simple type(no need to run ctr and dctr)
         template <typename T>
             struct Helper {
+                static_assert(is_simple_type<T>::value, "T is not a simple type");
+                typedef protobuf::RepeatedField<T> RepeatedFieldType;
 
+                // Encoder of simple type T to a string.  We do a copy.
+                template<typename Destination>
+                    static void Encode(TensorBuffer* in, int64 n, Destination* out){
+                        DCHECK_EQ(in->size(), sizeof(T)*n);
+                        port::AssignRefCounted(StringPiece(in->base<const char>(), in->size()), in, out);
+                    }
+                template<typename Source>
+                    static TensorBuffer* Decode(Allocator* a, const Source& in, int64 n){
+                        if (in.size() != sizeof(T) * n) {
+                            LogUnexpectedSize(in.size(), sizeof(T) * n);
+                            return nullptr;
+                        }
+                        Buffer<T>* buf = new Buffer<T>(a, n);
+                        char* data = buf->template base<char>();
+                        if (data == nullptr) {
+                            buf->Unref();
+                            return nullptr;
+                        }
+                        port::CopyToArray(in, data);
+                        in->assign();
+                        return buf;
+                    }
                 // Memory usage.
                 static int64_t TotalBytes(TensorBuffer* in, int64_t n) {
                     CHECK_EQ(in->size(), sizeof(T) * n);
                     return in->size();
+                }
+            };
+        // specialize for complex objects
+        template<>
+            struct Helper<tstring>{
+                typedef protobuf::RepeatedField<string> RepeatedFieldType;
+                template<typename Destination>
+                    static void Encode(TensorBuffer* in, int64 n, Destination* out){
+                        port::EncodeStringList(in->base<const tstring>(), n, out);
+                    }
+                template<typename Source>
+                    static TensorBuffer* Decode(Allocator* a, const Source& in, int64 n){
+                        Buffer<tstring>* buf = new Buffer<tstring>(a, n);
+                        tstring* strings = buf->template base<tstring>();
+                        if (strings == nullptr || !port::DecodeStringList(in, strings, n)) {
+                            buf->Unref();
+                            return nullptr;
+                        }
+                        return buf;
+                    }
+
+                // Memory usage.
+                static int64_t TotalBytes(TensorBuffer* in, int64_t n) {
+                    int64 tot = in->size();
+                    DCHECK_EQ(tot, sizeof(tstring) * n);
+                    const tstring* p = in->base<const tstring>();
+                    for (int i = 0; i < n; ++i, ++p) tot += p->size();
+                    return tot;
                 }
             };
 
@@ -198,6 +257,93 @@ namespace dlxnet{
         }
     }
 
+    template<typename T>
+        struct ProtoHelper{};
+    // For a C++ type "T" (float, double, int32, etc.), the repeated field
+    // "N"_val (float_val, int_val, label_val, etc.) of type "F" (float,
+    // int32, string, etc) in the TensorProto is used for serializing the
+    // tensor of type "T".
+#define PROTO_TRAITS(T, F, N)                                          \
+    template <>                                                          \
+    struct ProtoHelper<T> {                                              \
+        typedef Helper<F>::RepeatedFieldType FieldType;                    \
+        static FieldType::const_iterator Begin(const TensorProto& proto) { \
+            return proto.N##_val().begin();                                  \
+        }                                                                  \
+        static size_t NumElements(const TensorProto& proto) {              \
+            return proto.N##_val().size();                                   \
+        }                                                                  \
+        static void Fill(const T* data, size_t n, TensorProto* proto) {    \
+            typename ProtoHelper<T>::FieldType copy(data, data + n);         \
+            proto->mutable_##N##_val()->Swap(&copy);                         \
+        }                                                                  \
+    };
+    PROTO_TRAITS(float, float, float);
+    PROTO_TRAITS(double, double, double);
+    PROTO_TRAITS(int32, int32, int);
+    PROTO_TRAITS(uint8, int32, int);
+    PROTO_TRAITS(uint16, int32, int);
+    PROTO_TRAITS(uint32, uint32, uint32);
+    PROTO_TRAITS(int16, int32, int);
+    PROTO_TRAITS(int8, int32, int);
+    PROTO_TRAITS(bool, bool, bool);
+    // PROTO_TRAITS(tstring, tstring, string);
+#undef PROTO_TRAITS
+
+    // Allocates a T[n] buffer. Fills in the buffer with repeated values
+    // in "in".  If "in" has less values than "n", fills the rest of T[n]
+    // with the last value. If "in" has no values, fills T[n] with the
+    // default value for T.
+    //
+    // This routine is using the typed fields (float_val, etc.) in the
+    // tensor proto as opposed to the untyped binary representation
+    // (tensor_content). This is used when we expect the TensorProto is
+    // used by a client program which may not know how to encode a tensor
+    // in the compact binary representation.
+    template <typename T>
+        TensorBuffer* FromProtoField(Allocator* a, const TensorProto& in, int64 n) {
+            CHECK_GT(n, 0);
+            Buffer<T>* buf = new Buffer<T>(a, n);
+            T* data = buf->template base<T>();
+            if (data == nullptr) {
+                buf->Unref();
+                return nullptr;
+            }
+
+            const int64 in_n = ProtoHelper<T>::NumElements(in);
+            if (in_n <= 0) {
+                std::fill_n(data, n, T());
+            } else {
+                auto begin = ProtoHelper<T>::Begin(in);
+                if (n <= in_n) {
+                    std::copy_n(begin, n, data);
+                } else {
+                    std::copy_n(begin, in_n, data);
+                    if (std::is_trivially_copyable<T>::value) {
+                        const T last = *(data + in_n - 1);
+                        std::fill_n(data + in_n, n - in_n, last);
+                    } else {
+                        const T& last = *(data + in_n - 1);
+                        std::fill_n(data + in_n, n - in_n, last);
+                    }
+                }
+            }
+
+            return buf;
+        }
+
+    // Copies T[n] stored in the buffer "in" into the repeated field in
+    // "out" corresponding to type T.
+    template <typename T>
+        void ToProtoField(const TensorBuffer& in, int64 n, TensorProto* out) {
+            const T* data = in.base<const T>();
+            // NOTE: T may not the same as
+            // ProtoHelper<T>::FieldType::value_type.  E.g., T==int16,
+            // ProtoHelper<T>::FieldType::value_type==int32.  If performance is
+            // critical, we can specialize T=float and do memcpy directly.
+            ProtoHelper<T>::Fill(data, n, out);
+        }
+
     bool Tensor::FromProto(const TensorProto& proto){
         return FromProto(get_default_cpu_allocator(), proto);
     }
@@ -234,14 +380,21 @@ namespace dlxnet{
     }
     void Tensor::AsProtoField(TensorProto* proto) const {
         proto->Clear();
-        // shape_.AsProto(proto->mutable_tensor_shape());
-        // proto->set_dtype(dtype());
-        // if (buf_) {
-        // CASES(dtype(), ToProtoField<T>(*buf_, shape_.num_elements(), proto));
-        // }
+        shape_.AsProto(proto->mutable_tensor_shape());
+        proto->set_dtype(dtype());
+        if (buf_) {
+            CASES(dtype(), ToProtoField<T>(*buf_, shape_.num_elements(), proto));
+        }
     }
 
     void Tensor::AsProtoTensorContent(TensorProto* proto) const {
+        proto->Clear();
+        proto->set_dtype(dtype());
+        shape_.AsProto(proto->mutable_tensor_shape());
+        if (buf_) {
+            CASES(dtype(), Helper<T>::Encode(buf_, shape_.num_elements(),
+                        proto->mutable_tensor_content()));
+        }
     }
 
     string Tensor::DebugString(int num_values) const {

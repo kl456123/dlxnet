@@ -11,6 +11,7 @@
 #include "dlxnet/core/framework/tensor_types.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
 #include "dlxnet/core/framework/types.h"
+#include "dlxnet/core/lib/core/refcount.h"
 
 namespace dlxnet{
 
@@ -20,7 +21,7 @@ namespace dlxnet{
     class TensorBuffer;
     class TensorProto;
 
-    class TensorBuffer {
+    class TensorBuffer : public core::RefCounted{
         public:
             explicit TensorBuffer(void* data_ptr) : data_(data_ptr) {}
             virtual ~TensorBuffer() {}

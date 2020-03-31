@@ -96,6 +96,8 @@ namespace dlxnet{
             DataType* value);// type: "DataType"
     Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
             const TensorProto** value);
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            bool* value);
 
     // Produces a formatted string pattern from the node which can uniquely identify
     // this node upstream to produce an informative error message. The pattern

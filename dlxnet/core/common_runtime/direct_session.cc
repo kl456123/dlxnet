@@ -353,6 +353,7 @@ namespace dlxnet{
             default_runner = [](Executor::Args::Closure c) { c(); };
         }
 
+        args.runner = default_runner;
         const auto& item = executors_and_keys->items[0];
         // set_threadpool_args_for_item(item, &args);
         run_status = item.executor->Run(args);

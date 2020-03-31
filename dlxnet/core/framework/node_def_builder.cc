@@ -98,21 +98,30 @@ namespace dlxnet{
     }
 
     Status NodeDefBuilder::Finalize(NodeDef* node_def){
+        const std::vector<string>* errors_ptr = &errors_;
         if(op_def_!=nullptr && inputs_specified_<op_def_->input_arg_size()){
             // no enough inputs specified
             errors_.push_back(
                     strings::StrCat(inputs_specified_, " inputs specified of ",
                         op_def_->input_arg_size(), " inputs in Op"));
         }
+
         // return error meesage
-        if(!errors_.empty()){
-            // one error
-            if(errors_.size()==1){
-                return errors::InvalidArgument(errors_[0],
-                        " while building NodeDef '",
-                        node_def_.name(), "'");
-            }else{
-                // summary all
+        if(!errors_ptr->empty()){
+            if (errors_ptr->size() == 1) {
+                if (op_def_ == nullptr) {
+                    return errors::InvalidArgument((*errors_ptr)[0],
+                            " while building NodeDef '",
+                            node_def_.name(), "'");
+                }
+                return errors::InvalidArgument(
+                        (*errors_ptr)[0], " while building NodeDef '", node_def_.name(),
+                        "' using ", SummarizeOpDef(*op_def_));
+            } else {
+                return errors::InvalidArgument(
+                        errors_ptr->size(), " errors while building NodeDef '",
+                        node_def_.name(), "' using ", SummarizeOpDef(*op_def_), ":\n",
+                        absl::StrJoin(*errors_ptr, "\n"));
             }
         }else{
             // no error

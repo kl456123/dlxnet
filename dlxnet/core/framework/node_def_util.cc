@@ -296,6 +296,16 @@ namespace dlxnet{
         return Status::OK();
     }
 
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            bool* value){
+        const AttrValue* attr_value;
+        TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));
+        // TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, ""));
+        const auto& v = attr_value->b();
+        *value = v;
+        return Status::OK();
+    }
+
     string FormatNodeForError(const Node& node){
         return node.name();
     }
