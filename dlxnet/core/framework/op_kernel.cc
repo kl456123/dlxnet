@@ -502,6 +502,7 @@ namespace dlxnet{
 
         bool allocate_and_copy = false;
         if(allocate_and_copy){
+        }else{
             outputs_[index] = TensorValue(new Tensor(tensor));
             if(track_allocations() && tensor.TotalBytes()>0){
                 // track allocation

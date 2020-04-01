@@ -13,6 +13,8 @@ namespace dlxnet{
     class GraphView;
     class NodeItem;
 
+    typedef std::vector<int> PendingCounts;
+
     struct EdgeInfo {
         int dst_id;
         int output_slot : 31;
@@ -127,7 +129,11 @@ namespace dlxnet{
                 CHECK(p.create_kernel != nullptr);
                 CHECK(p.delete_kernel != nullptr);
             }
-            ~ExecutorImpl() override {}
+            ~ExecutorImpl() override {
+                for (auto fiter : frame_info_) {
+                    delete fiter.second;
+                }
+            }
             Status Initialize(const Graph& graph);
             void RunAsync(const Args& args, DoneCallback done) override;
         private:
@@ -136,14 +142,19 @@ namespace dlxnet{
             struct FrameInfo{
                 FrameInfo()
                     :total_inputs(0),
-                    input_count(0){}
+                    input_count(0),
+                    pending_counts(nullptr){}
 
                 int input_count;
 
                 int total_inputs;
+                // Each frame has its own PendingCounts only for the nodes in the frame.
+                PendingCounts* pending_counts;  // Owned
+
                 ~FrameInfo(){}
             };
 
+            void InitializePending(const Graph* graph);
             FrameInfo* EnsureFrameInfo(const string& fname){
                 auto slot = &frame_info_[fname];
                 if (*slot == nullptr) {
@@ -250,14 +261,30 @@ namespace dlxnet{
                 // The attributes of the allocator that creates the tensor.
                 AllocatorAttributes alloc_attr;
             };
+            // Contains the device context assigned by the device at the beginning of a
+            // step.
+            DeviceContext* device_context_ = nullptr;
+
+            struct TaggedNode;
+            typedef gtl::InlinedVector<TaggedNode, 8> TaggedNodeSeq;
+            typedef gtl::InlinedVector<Entry, 4> EntryVector;
 
             struct IterationState{
-                explicit IterationState(int total_input_tensors)
-                    : input_tensors(new Entry[total_input_tensors]){}
+                explicit IterationState(PendingCounts* pending_counts,
+                        int total_input_tensors)
+                    : input_tensors(new Entry[total_input_tensors]),
+                    counts(pending_counts){}
                 ~IterationState() { delete[] input_tensors; }
                 Entry*  input_tensors;
+                void adjust_for_activation(int h, int* pending_result,
+                        int* dead_result) {
+                    int* current_pending_count = &(*counts)[h];
+                    CHECK_GT(*current_pending_count, 0);
+                    (*current_pending_count)--;
+                    *pending_result = *current_pending_count;
+                }
                 private:
-                std::vector<int> pending_counts;
+                PendingCounts* counts;
             };
 
             struct FrameState{
@@ -271,6 +298,7 @@ namespace dlxnet{
                 // The number of inputs this frame is still waiting.
                 int num_pending_inputs = 0;
                 int total_input_tensors = 0;
+                PendingCounts* pending_counts=nullptr;
                 private:
                 // The active iteration states of this frame.
                 IterationState* iteration_first GUARDED_BY(mu);
@@ -286,9 +314,10 @@ namespace dlxnet{
                     ExecutorImpl::FrameInfo* finfo = it_frame_info->second;
                     total_input_tensors = finfo->total_inputs;
                     num_pending_inputs = finfo->input_count;
+                    pending_counts = finfo->pending_counts;
                 }
 
-                inline IterationState* GetIteration()
+                inline IterationState* GetIteration(int64 iter)
                     EXCLUSIVE_LOCKS_REQUIRED(mu) {
                         return iteration_first;
                     }
@@ -298,6 +327,13 @@ namespace dlxnet{
                         iteration_first = state;
                     }
 
+                // Activate the successors of a node. Contents of *outputs are left in an
+                // indeterminate state after returning from this method.
+                void ActivateNodes(const NodeItem* item, const bool is_dead, int64 iter,
+                        EntryVector* outputs, TaggedNodeSeq* ready)
+                    EXCLUSIVE_LOCKS_REQUIRED(mu);
+
+
                 ~FrameState() {
                     delete iteration_first;
                     iteration_first = nullptr;
@@ -305,21 +341,20 @@ namespace dlxnet{
 
             };
 
-            // Contains the device context assigned by the device at the beginning of a
-            // step.
-            DeviceContext* device_context_ = nullptr;
 
-            struct TaggedNode;
-            typedef gtl::InlinedVector<TaggedNode, 8> TaggedNodeSeq;
-            typedef gtl::InlinedVector<Entry, 4> EntryVector;
 
             // A tagged node: <frame*, iter, node*>.
             struct TaggedNode {
                 const NodeItem* node_item;
                 bool is_dead = false;
+                int64 input_iter = -1;
+                FrameState* input_frame;
 
-                TaggedNode(const NodeItem* node_item, bool dead)
+                TaggedNode(const NodeItem* node_item, FrameState* in_frame, int64 in_iter,
+                        bool dead)
                     : node_item(node_item),
+                    input_frame(in_frame),
+                    input_iter(in_iter),
                     is_dead(dead) {}
             };
 
@@ -412,6 +447,16 @@ namespace dlxnet{
             // Clean up when this executor is done.
             void Finish();
             void ScheduleFinish();
+
+            // A standalone routine for this expression so that we can express
+            // that we don't want thread safety analysis on this reference (it's
+            // safe to do without the lock because the iterations array never
+            // resizes and this particular iteration's array element will not
+            // be changed out from under us because the iteration is still alive).
+            Entry* GetInputTensors(FrameState* input_frame,
+                    int64 input_iter) const NO_THREAD_SAFETY_ANALYSIS {
+                return input_frame->GetIteration(input_iter)->input_tensors;
+            }
     };
 
     ExecutorState::~ExecutorState(){
@@ -420,6 +465,19 @@ namespace dlxnet{
         }
     }
     void ExecutorState::Finish(){
+        mu_.lock();
+        auto status = status_;
+        auto done_cb = std::move(done_cb_);
+        auto runner = std::move(runner_);
+        mu_.unlock();
+        int64 step_id = step_id_;
+        CHECK(done_cb != nullptr);
+        Device* device = impl_->params_.device;
+
+        delete this;
+        runner([step_id, status, done_cb = std::move(done_cb)]() {
+                done_cb(status);
+                });
     }
 
     void ExecutorState::ScheduleFinish(){
@@ -462,6 +520,8 @@ namespace dlxnet{
             tagged_node = inline_ready.front();
             inline_ready.pop_front();
             const NodeItem& item = *tagged_node.node_item;
+            FrameState* input_frame = tagged_node.input_frame;
+            const int64 input_iter = tagged_node.input_iter;
             const int id = item.node_id;
 
             if (vlog_) {
@@ -473,9 +533,8 @@ namespace dlxnet{
             outputs.clear();
             DeviceContext* device_context = nullptr;
 
-            // Entry* input_tensors = ;
-            // Entry* first_input = input_tensors + item.input_start;
-            Entry* first_input = nullptr;
+            Entry* input_tensors = GetInputTensors(input_frame, input_iter);
+            Entry* first_input = input_tensors + item.input_start;
             bool launched_asynchronously = false;
 
             // Prepares inputs.
@@ -548,7 +607,7 @@ namespace dlxnet{
         // Initialize the ready queue.
         for (const NodeItem* item : impl_->root_nodes_) {
             DCHECK_EQ(item->num_inputs, 0);
-            ready.push_back(TaggedNode{item, false});
+            ready.push_back(TaggedNode{item, root_frame_, 0, false});
         }
         if (ready.empty()) {
             delete this;
@@ -564,32 +623,81 @@ namespace dlxnet{
     Status ExecutorState::PrepareInputs(const NodeItem& item, Entry* first_input,
             TensorValueVec* inputs, AllocatorAttributeVec* input_alloc_attrs,
             bool* is_input_dead){
+        inputs->clear();
+        inputs->resize(item.num_inputs);
+        input_alloc_attrs->clear();
+        input_alloc_attrs->resize(item.num_inputs);
+
+        *is_input_dead = false;
+
+        for (int i = 0; i < item.num_inputs; ++i){
+            const bool expect_ref = IsRefType(item.input_type(i));
+            Entry* entry = first_input + i;
+            (*input_alloc_attrs)[i] = entry->alloc_attr;
+
+            // i-th input.
+            TensorValue* inp = &(*inputs)[i];
+
+            // Only merge and transfer nodes can have no-value inputs.
+            if (!entry->has_value) {
+                continue;
+            }
+            if (entry->ref == nullptr) {
+                if (expect_ref) {
+                    return errors::InvalidArgument(i, "-th input expects a ref type");
+                }
+                inp->tensor = entry->val.get();
+            }else{
+                {
+                    tf_shared_lock ml(*entry->ref_mu);
+                    if (!entry->ref->IsInitialized()) {
+                        return errors::FailedPrecondition(
+                                "Attempting to use uninitialized value ",
+                                item.kernel->requested_input(i));
+                    }
+                }
+                inp->mutex_if_ref = entry->ref_mu;
+                inp->tensor = entry->ref;
+            }
+        }
         return Status::OK();
     }
 
     void ExecutorState::PropagateOutputs(const TaggedNode& tagged_node, const NodeItem* item,
             EntryVector* outputs, TaggedNodeSeq* ready){
-        ready->clear();
+        FrameState* input_frame = tagged_node.input_frame;
+        const int64 input_iter = tagged_node.input_iter;
+        const bool is_dead = tagged_node.is_dead;
+
         // Propagates outputs along out edges, and puts newly ready nodes
         // into the ready queue.
-        const int num_output_edges = item->num_output_edges;
-        const GraphView& gview = impl_->gview_;
-        const EdgeInfo* edges = item->output_edge_list();
-        for(size_t out_index=0;out_index<num_output_edges;++out_index){
-            const EdgeInfo& e = edges[out_index];
-            const int dst_id = e.dst_id;
-            const NodeItem* dst_item = gview.node(dst_id);
+        ready->clear();
+        bool is_frame_done = false;
+        FrameState* output_frame = input_frame;
+        int64 output_iter = input_iter;
 
-            bool dst_ready = false;
-            bool dst_dead = false;
-
-            if(dst_ready){
-                ready->emplace_back(dst_item, dst_dead);
-            }
-        }
+        // Fast path for nodes types that don't need special handling
+        DCHECK_EQ(input_frame, output_frame);
+        // Normal path for most nodes
+        mutex_lock l(input_frame->mu);
+        output_frame->ActivateNodes(item, is_dead, output_iter, outputs, ready);
     }
+
     bool ExecutorState::NodeDone(const Status& s, const TaggedNodeSeq& ready,
-            TaggedNodeReadyQueue* inline_ready){}
+            TaggedNodeReadyQueue* inline_ready){
+        int ready_size = ready.size();
+        bool completed = false;
+        if (ready_size == 0 || !s.ok()) {
+            completed = (num_outstanding_ops_.fetch_sub(1) == 1);
+        } else if (ready_size > 1) {
+            num_outstanding_ops_.fetch_add(ready_size - 1, std::memory_order_relaxed);
+        }
+
+        if(s.ok()){
+            ScheduleReady(ready, inline_ready);
+        }
+        return completed;
+    }
 
     Status ExecutorState::ProcessOutputs(const NodeItem& item, OpKernelContext* ctx,
             EntryVector* outputs){
@@ -727,8 +835,47 @@ namespace dlxnet{
 
             // Initialize iteration 0.
             root_frame_->SetIteration(
-                    new IterationState(root_frame_->total_input_tensors));
+                    new IterationState(root_frame_->pending_counts,
+                        root_frame_->total_input_tensors));
         }
+
+    void ExecutorState::FrameState::ActivateNodes(const NodeItem* item,
+            const bool is_dead, int64 iter,
+            EntryVector* outputs,
+            TaggedNodeSeq* ready){
+        const GraphView& gview = executor->gview_;
+        IterationState* iter_state = GetIteration(iter);
+        const size_t num_output_edges = item->num_output_edges;
+        const EdgeInfo* edges = item->output_edge_list();
+        Entry* input_tensors = iter_state->input_tensors;
+        for (size_t out_index = 0; out_index < num_output_edges; out_index++) {
+            const EdgeInfo& e = edges[out_index];
+            const int dst_id = e.dst_id;
+            const NodeItem* dst_item = gview.node(dst_id);
+            // const PendingCounts::Handle dst_pending_id = dst_item->pending_id;
+            int dst_pending_id = dst_item->node_id;
+            const int src_slot = e.output_slot;
+            bool dst_ready = false;
+            bool dst_dead = false;
+            bool dst_need_input = true;
+
+            int pending, dead;
+            iter_state->adjust_for_activation(dst_pending_id, &pending, &dead);
+            dst_dead = (dead > 0);
+            dst_ready = (pending==0);
+
+            if (dst_need_input) {
+                const int dst_slot = e.input_slot;
+                const int dst_loc = dst_item->input_start + dst_slot;
+                input_tensors[dst_loc] = (*outputs)[src_slot];
+            }
+
+            // Add dst to the ready queue if it's ready
+            if (dst_ready) {
+                ready->emplace_back(dst_item, this, iter, dst_dead);
+            }
+        }
+    }
 
 
 
@@ -762,11 +909,29 @@ namespace dlxnet{
             item->input_start = frame_info->total_inputs;
             frame_info->total_inputs += n->num_inputs();
         }
+
+        InitializePending(&graph);
         return Status::OK();
     }
 
     void ExecutorImpl::RunAsync(const Args& args, DoneCallback done){
         (new ExecutorState(args, this))->RunAsync(std::move(done));
+    }
+    void ExecutorImpl::InitializePending(const Graph* graph){
+        // only root frame is used
+        const string frame_name = "";
+        const int num_nodes = graph->num_node_ids();
+
+        FrameInfo* finfo = EnsureFrameInfo(frame_name);
+        PendingCounts* counts = new PendingCounts();
+        DCHECK_EQ(finfo->pending_counts, nullptr);
+        finfo->pending_counts = counts;
+
+        counts->reserve(num_nodes);
+        for (const Node* node: graph->nodes()) {
+            int pending_count = node->num_inputs();
+            counts->push_back(pending_count);
+        }
     }
 
     // GraphView
