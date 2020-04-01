@@ -5,6 +5,7 @@
 #include "dlxnet/core/lib/gtl/inlined_vector.h"
 #include "dlxnet/core/lib/gtl/manual_constructor.h"
 #include "dlxnet/core/framework/log_memory.h"
+#include "dlxnet/core/lib/gtl/flatmap.h"
 
 
 namespace dlxnet{
@@ -132,12 +133,36 @@ namespace dlxnet{
         private:
             friend class ExecutorState;
 
+            struct FrameInfo{
+                FrameInfo()
+                    :total_inputs(0),
+                    input_count(0){}
+
+                int input_count;
+
+                int total_inputs;
+                ~FrameInfo(){}
+            };
+
+            FrameInfo* EnsureFrameInfo(const string& fname){
+                auto slot = &frame_info_[fname];
+                if (*slot == nullptr) {
+                    *slot = new FrameInfo;
+                }
+                return *slot;
+            }
+
             // Owned.
             LocalExecutorParams params_;
             GraphView gview_;
 
             // Root nodes (with no in edges) that should form the initial ready queue
             std::vector<const NodeItem*> root_nodes_;
+
+            // Mapping from frame name to static information about the frame.
+            // TODO(yuanbyu): We could cache it along with the graph so to avoid
+            // the overhead of constructing it for each executor instance.
+            gtl::FlatMap<string, FrameInfo*> frame_info_;
 
             TF_DISALLOW_COPY_AND_ASSIGN(ExecutorImpl);
     };
@@ -226,6 +251,60 @@ namespace dlxnet{
                 AllocatorAttributes alloc_attr;
             };
 
+            struct IterationState{
+                explicit IterationState(int total_input_tensors)
+                    : input_tensors(new Entry[total_input_tensors]){}
+                ~IterationState() { delete[] input_tensors; }
+                Entry*  input_tensors;
+                private:
+                std::vector<int> pending_counts;
+            };
+
+            struct FrameState{
+                explicit FrameState(const ExecutorImpl* impl)
+                    :executor(impl){}
+                const ExecutorImpl* executor = nullptr;
+
+                string frame_name;
+                uint64 frame_id;
+
+                // The number of inputs this frame is still waiting.
+                int num_pending_inputs = 0;
+                int total_input_tensors = 0;
+                private:
+                // The active iteration states of this frame.
+                IterationState* iteration_first GUARDED_BY(mu);
+
+                public:
+                // Lock ordering: ExecutorState.mu_ < mu;
+                // during structured traversal: parent_frame->mu < mu.
+                mutex mu;
+
+                void InitializeFrameInfo(const string& enter_name) {
+                    auto it_frame_info = executor->frame_info_.find(enter_name);
+                    DCHECK(it_frame_info != executor->frame_info_.end());
+                    ExecutorImpl::FrameInfo* finfo = it_frame_info->second;
+                    total_input_tensors = finfo->total_inputs;
+                    num_pending_inputs = finfo->input_count;
+                }
+
+                inline IterationState* GetIteration()
+                    EXCLUSIVE_LOCKS_REQUIRED(mu) {
+                        return iteration_first;
+                    }
+
+                inline void SetIteration(IterationState* state)
+                    EXCLUSIVE_LOCKS_REQUIRED(mu){
+                        iteration_first = state;
+                    }
+
+                ~FrameState() {
+                    delete iteration_first;
+                    iteration_first = nullptr;
+                }
+
+            };
+
             // Contains the device context assigned by the device at the beginning of a
             // step.
             DeviceContext* device_context_ = nullptr;
@@ -293,6 +372,10 @@ namespace dlxnet{
             // Owned.
             mutex mu_;
             Status status_ GUARDED_BY(mu_);
+
+            // The root frame in which the execution of this step is started.
+            FrameState* root_frame_;
+
             // Invoked when the execution finishes.
             Executor::DoneCallback done_cb_;
             std::atomic_int_fast32_t num_outstanding_ops_;
@@ -389,12 +472,16 @@ namespace dlxnet{
             }
             outputs.clear();
             DeviceContext* device_context = nullptr;
-            bool launched_asynchronously;
+
+            // Entry* input_tensors = ;
+            // Entry* first_input = input_tensors + item.input_start;
+            Entry* first_input = nullptr;
+            bool launched_asynchronously = false;
 
             // Prepares inputs.
             bool is_input_dead = false;
-            // s = PrepareInputs(item, first_input, &inputs, &input_alloc_attrs,
-            // &is_input_dead);
+            s = PrepareInputs(item, first_input, &inputs, &input_alloc_attrs,
+                    &is_input_dead);
 
             if (!s.ok()) {
                 // Clear inputs.
@@ -474,6 +561,12 @@ namespace dlxnet{
         }
     }
 
+    Status ExecutorState::PrepareInputs(const NodeItem& item, Entry* first_input,
+            TensorValueVec* inputs, AllocatorAttributeVec* input_alloc_attrs,
+            bool* is_input_dead){
+        return Status::OK();
+    }
+
     void ExecutorState::PropagateOutputs(const TaggedNode& tagged_node, const NodeItem* item,
             EntryVector* outputs, TaggedNodeSeq* ready){
         ready->clear();
@@ -500,6 +593,72 @@ namespace dlxnet{
 
     Status ExecutorState::ProcessOutputs(const NodeItem& item, OpKernelContext* ctx,
             EntryVector* outputs){
+        DCHECK_EQ(outputs->size(), 0);
+        outputs->resize(item.num_outputs);
+        // check status
+        Status s = ctx->status();
+        if(!s.ok()){
+            return s;
+        }
+
+        for(int i=0;i<item.num_outputs; ++i){
+            const TensorValue val = ctx->release_output(i);
+            if(val.tensor==nullptr){
+                s.Update(errors::Internal("Missing ", i, "-th output from ",
+                            FormatNodeDefForError(item.kernel->def())));
+            }else{
+                Entry* out = &((*outputs)[i]);
+
+                // Set the allocator attributes of the output entry.
+                out->alloc_attr = ctx->output_alloc_attr(i);
+
+                // Sanity check of output tensor types. We need to inspect this safely as
+                // we are in the tensor buffer.
+                DataType dtype = val.dtype_safe();
+                if(dtype==item.output_type(i)){
+                    // assign to out
+                    if(val.is_ref()){
+                        out->has_value = true;
+                        out->ref = val.tensor;
+                        out->ref_mu = val.mutex_if_ref;
+                        if (log_memory_) {
+                            Tensor to_log;
+                            {
+                                // Dereference the tensor under the lock.
+                                tf_shared_lock l(*out->ref_mu);
+                                to_log = *out->ref;
+                            }
+                            LogMemory::RecordTensorOutput(ctx->op_kernel().name(),
+                                    ctx->step_id(), i, to_log);
+                        }
+                    }else{
+                        // NOTE that std::move is used here, so val.tensor goes to
+                        // uninitialized state (val.tensor->IsInitialized return false).
+                        DCHECK(!out->val_field_is_set);
+                        out->has_value = true;
+                        out->val_field_is_set = true;
+                        out->val.Init(std::move(*val.tensor));
+                        if (log_memory_) {
+                            LogMemory::RecordTensorOutput(ctx->op_kernel().name(),
+                                    ctx->step_id(), i, *out->val);
+                        }
+                    }
+                }else{
+                    s.Update(
+                            errors::Internal("Output ", i, " of type ", DataTypeString(dtype),
+                                " does not match declared output type ",
+                                DataTypeString(item.output_type(i)), " for node ",
+                                FormatNodeDefForError(item.kernel->def())));
+                }
+
+                if (!val.is_ref()) {
+                    // If OpKernelContext returns outputs via pass-by-value, we
+                    // don't need this trouble.
+                    delete val.tensor;
+                }
+            }
+            return s;
+        }
         return Status::OK();
     }
 
@@ -558,7 +717,18 @@ namespace dlxnet{
         impl_(impl),
         runner_(args.runner),
         sync_on_finish_(args.sync_on_finish),
-        num_outstanding_ops_(0) {}
+        num_outstanding_ops_(0) {
+            // We start the entire execution in iteration 0 of the root frame
+            // so let us create the root frame and the state for iteration 0.
+            // We assume root_frame_->frame_name.empty().
+            root_frame_ = new FrameState(impl_);
+            root_frame_->frame_id = 0;  // must be 0
+            root_frame_->InitializeFrameInfo(root_frame_->frame_name);
+
+            // Initialize iteration 0.
+            root_frame_->SetIteration(
+                    new IterationState(root_frame_->total_input_tensors));
+        }
 
 
 
@@ -587,6 +757,10 @@ namespace dlxnet{
             if (n->in_edges().empty()) {
                 root_nodes_.push_back(item);
             }
+            const string frame_name = "";
+            FrameInfo* frame_info = EnsureFrameInfo(frame_name);
+            item->input_start = frame_info->total_inputs;
+            frame_info->total_inputs += n->num_inputs();
         }
         return Status::OK();
     }

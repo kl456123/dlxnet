@@ -942,6 +942,14 @@ namespace dlxnet{
                 return outputs_[index].tensor;
             }
 
+            inline TensorValue OpKernelContext::release_output(int index) {
+                DCHECK_GE(index, 0);
+                DCHECK_LT(index, num_outputs());
+                TensorValue value = outputs_[index];
+                outputs_[index] = TensorValue();
+                return value;
+            }
+
             inline MemoryType OpKernelContext::input_memory_type(int index) const {
                 DCHECK_GE(index, 0);
                 DCHECK_LT(index, num_inputs());
