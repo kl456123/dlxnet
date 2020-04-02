@@ -9,10 +9,11 @@
 #include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/platform/errors.h"
 #include "dlxnet/core/platform/status.h"
-
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "dlxnet/core/framework/tensor_shape.pb.h"
 #include "dlxnet/core/framework/types.pb.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
+#include "dlxnet/core/lib/gtl/inlined_vector.h"
 
 namespace dlxnet{
     template<typename Shape>
@@ -248,7 +249,7 @@ namespace dlxnet{
 
                 /// Returns sizes of all dimensions.
                 // Returns an empty list for unknown rank PartialTensorShape.
-                std::array<int64_t, 4> dim_sizes() const;
+                gtl::InlinedVector<int64, 4> dim_sizes() const;
 
                 /// Return true iff the rank and all of the dimensions are well defined
                 // TODO(irving): Rename to is_fully_defined now that it's fast.
@@ -301,6 +302,19 @@ namespace dlxnet{
             bool IsSameSize(const TensorShape& b) const;
             bool operator==(const TensorShape& b) const { return IsSameSize(b); }
             bool operator!=(const TensorShape& b) const { return !IsSameSize(b); }
+
+            /// Fill `*dsizes` from `*this`.
+            /// Notice: Using IndexType=int32 in combination with To32Bit() can
+            /// significantly improve performance on GPU.
+            template <int NDIMS, typename IndexType = Eigen::DenseIndex>
+                Eigen::DSizes<IndexType, NDIMS> AsEigenDSizes() const;
+
+            /// Same as `AsEigenDSizes()` but allows for `NDIMS > dims()` -- in
+            /// which case we pad the rest of the sizes with 1.
+            /// Notice: Using IndexType=int32 in combination with To32Bit() can
+            /// significantly improve performance on GPU.
+            template <int NDIMS, typename IndexType = Eigen::DenseIndex>
+                Eigen::DSizes<IndexType, NDIMS> AsEigenDSizesWithPadding() const;
 
         private:
             // These CHECK fail to ease debugging.
@@ -384,6 +398,26 @@ namespace dlxnet{
             uint16_t* dst = as16()->dims_;
             *dst = 0;
             set_num_elements(0);
+        }
+
+    template <int NDIMS, typename IndexType>
+        Eigen::DSizes<IndexType, NDIMS> TensorShape::AsEigenDSizes() const {
+            CheckDimsEqual(NDIMS);
+            return AsEigenDSizesWithPadding<NDIMS, IndexType>();
+        }
+
+    template <int NDIMS, typename IndexType>
+        Eigen::DSizes<IndexType, NDIMS> TensorShape::AsEigenDSizesWithPadding() const {
+            CheckDimsAtLeast(NDIMS);
+            static_assert(NDIMS <= TensorShape::MaxDimensions(), "Too many dimensions");
+            Eigen::DSizes<IndexType, NDIMS> dsizes;
+            for (int d = 0; d < dims(); d++) {
+                dsizes[d] = static_cast<IndexType>(dim_size(d));
+            }
+            for (int d = dims(); d < NDIMS; d++) {
+                dsizes[d] = 1;
+            }
+            return dsizes;
         }
 
     // Declare explicit instantiations in .cc file

@@ -148,6 +148,17 @@ namespace dlxnet{
             /// Returns the estimated memory usage of this tensor.
             size_t TotalBytes() const;
 
+            /// Returns true iff this tensor is aligned.
+            bool IsAligned() const {
+#if EIGEN_MAX_ALIGN_BYTES == 0
+                return true;
+#else
+                void* ptr = base<void>();
+                return dtype() == DT_STRING ||
+                    (reinterpret_cast<intptr_t>(ptr) % EIGEN_MAX_ALIGN_BYTES == 0);
+#endif
+            }
+
             // Returns the size of allocated memory for this tensor.
             size_t AllocatedBytes() const;
             bool FromProto(const TensorProto& other) TF_MUST_USE_RESULT;
@@ -159,7 +170,31 @@ namespace dlxnet{
             string DeviceSafeDebugString() const;
             string DebugString() const { return DebugString(3); }
 
+            /// Render the first `max_entries` values in `*this` into a string.
+            string SummarizeValue(int64 max_entries) const;
+
             StringPiece tensor_data() const;
+
+            template <typename T>
+                typename TTypes<T>::Vec vec() {
+                    return tensor<T, 1>();
+                }
+
+            template <typename T>
+                typename TTypes<T>::Matrix matrix() {
+                    return tensor<T, 2>();
+                }
+
+            template <typename T>
+                typename TTypes<T>::ConstMatrix matrix() const {
+                    return tensor<T, 2>();
+                }
+
+            template <typename T, size_t NDIMS>
+                typename TTypes<T, NDIMS>::Tensor tensor();
+
+            template <typename T, size_t NDIMS>
+                typename TTypes<T, NDIMS>::ConstTensor tensor() const;
 
             void FillDescription(TensorDescription* description) const;
             template<typename T>
@@ -171,6 +206,8 @@ namespace dlxnet{
             template<typename T, size_t NDIMS>
                 typename TTypes<T, NDIMS>::Tensor shaped(gtl::ArraySlice<int64> new_sizes);
 
+
+        private:
             // check shape when view tensor(call flat<>() or tensor<>()) bit_casted capable
             template<typename T, size_t NDIMS>
                 void FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
@@ -179,7 +216,9 @@ namespace dlxnet{
             template<size_t NDIMS>
                 void FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
                         Eigen::array<Eigen::DenseIndex, NDIMS>* dims);
-        private:
+
+            void CheckType(DataType expected_dtype) const;
+            void CheckTypeAndIsAligned(DataType expected_dtype) const;
             void set_dtype(DataType t) { shape_.set_data_type(t); }
             void set_shape(const TensorShape& shape) {
                 DataType dt = dtype();
@@ -197,6 +236,22 @@ namespace dlxnet{
         T* Tensor::base() const {
             return buf_ == nullptr ? nullptr : buf_->base<T>();
         }
+
+
+    template <typename T, size_t NDIMS>
+        typename TTypes<T, NDIMS>::Tensor Tensor::tensor() {
+            CheckTypeAndIsAligned(DataTypeToEnum<T>::v());
+            return typename TTypes<T, NDIMS>::Tensor(base<T>(),
+                    shape().AsEigenDSizes<NDIMS>());
+        }
+
+    template <typename T, size_t NDIMS>
+        typename TTypes<T, NDIMS>::ConstTensor Tensor::tensor() const {
+            CheckTypeAndIsAligned(DataTypeToEnum<T>::v());
+            return typename TTypes<T, NDIMS>::ConstTensor(base<const T>(),
+                    shape().AsEigenDSizes<NDIMS>());
+        }
+
     template<typename T, size_t NDIMS>
         typename TTypes<T, NDIMS>::Tensor Tensor::shaped(gtl::ArraySlice<int64> new_sizes){
             Eigen::array<Eigen::DenseIndex, NDIMS> dims;

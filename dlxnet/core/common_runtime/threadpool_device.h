@@ -1,11 +1,11 @@
 #ifndef DLXNET_CORE_COMMON_RUNTIME_THREADPOOL_DEVICE_H_
 #define DLXNET_CORE_COMMON_RUNTIME_THREADPOOL_DEVICE_H_
-#include "dlxnet/core/common_runtime/device.h"
+#include "dlxnet/core/common_runtime/local_device.h"
 #include "dlxnet/core/public/session_options.h"
 
 namespace dlxnet{
 
-    class  ThreadPoolDevice : public Device{
+    class  ThreadPoolDevice : public LocalDevice{
         public:
             ThreadPoolDevice(const SessionOptions& options, const string& name,
                     Bytes memory_limit, const DeviceLocality& locality,

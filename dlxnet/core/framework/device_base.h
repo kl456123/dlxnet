@@ -85,15 +85,32 @@ namespace dlxnet{
                     Tensor* tensor) {
                 return errors::Internal("Device does not implement MakeTensorFromProto()");
             }
+
+            // eigen utils
+            void set_eigen_cpu_device(Eigen::ThreadPoolDevice* d);
+            const Eigen::ThreadPoolDevice* eigen_cpu_device();
+            void set_eigen_cpu_thread_pool(thread::ThreadPool* t){
+                cpu_thread_pool_ = t;
+            }
+
+            bool has_eigen_cpu_device()const{
+                return !eigen_cpu_devices_.empty();
+            }
+
+            const thread::ThreadPool* eigen_cpu_thread_pool()const{
+                CHECK(cpu_thread_pool_!=nullptr);
+                return cpu_thread_pool_;
+            }
         protected:
             // Does not take ownership.
-            void set_tensorflow_device_thread_pool(thread::ThreadPool* thread_pool) {
+            void set_device_thread_pool(thread::ThreadPool* thread_pool) {
                 device_thread_pool_ = thread_pool;
             }
 
         private:
             Env* const env_;
             thread::ThreadPool* device_thread_pool_ = nullptr;
+            thread::ThreadPool* cpu_thread_pool_ = nullptr;
             std::vector<Eigen::ThreadPoolDevice*> eigen_cpu_devices_;
     };
 }// namespace dlxnet

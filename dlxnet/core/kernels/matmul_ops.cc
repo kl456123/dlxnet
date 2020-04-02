@@ -1,3 +1,5 @@
+
+#define EIGEN_USE_THREADS
 #include "dlxnet/core/kernels/matmul_ops.h"
 #include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/framework/register_types.h"
@@ -41,7 +43,9 @@ namespace dlxnet{
                         // is a 0-element matrix, so there is nothing to do.
                         return ;
                     }
-                    // functor::MatMulFunctor<Device, T>(ctx->eigen_device<Device>(), out, a, b, dim_pair);
+                    functor::MatMulFunctor<Device, T>()(ctx->eigen_device<Device>(),
+                                            out->matrix<T>(), a.matrix<T>(),
+                                            b.matrix<T>(), dim_pair);
                 }
             private:
                 bool transpose_a_;

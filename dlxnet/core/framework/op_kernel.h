@@ -631,6 +631,16 @@ namespace dlxnet{
                 return params_->runner;
             }
 
+            // eigen utils
+            // OpKernels can use these eigen devices to carry out their
+            // numerical computation.
+            const Eigen::ThreadPoolDevice& eigen_cpu_device() const {
+                return *device()->eigen_cpu_device();
+            }
+
+            template <typename EigenDeviceType>
+                const EigenDeviceType& eigen_device() const;
+
             // An OpKernel should call SetStatus() if Compute() encounters an
             // error.
             void SetStatus(const Status& status);
@@ -729,6 +739,9 @@ namespace dlxnet{
 
             TF_DISALLOW_COPY_AND_ASSIGN(OpKernelContext);
     };
+
+    template <>
+        const Eigen::ThreadPoolDevice& OpKernelContext::eigen_device() const;
 
     // Register your OpKernel by specifying the Op's name, the device the
     // kernel runs on, any type attr constraints for this kernel, any

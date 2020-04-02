@@ -408,7 +408,7 @@ namespace dlxnet{
     string Tensor::DebugString(int num_values) const {
         return strings::StrCat("Tensor<type: ", DataTypeString(dtype()),
                 " shape: ", shape().DebugString(),
-                " values: ", "...", ">");
+                " values: ", SummarizeValue(num_values), ">");
     }
 
     string Tensor::DeviceSafeDebugString() const {
@@ -419,6 +419,74 @@ namespace dlxnet{
     StringPiece Tensor::tensor_data() const {
         if (buf_ == nullptr) return StringPiece();  // Don't die for empty tensors
         return StringPiece(static_cast<char*>(buf_->data()), TotalBytes());
+    }
+
+    void Tensor::CheckType(DataType expected_dtype) const {
+        CHECK_EQ(dtype(), expected_dtype)
+            << " " << DataTypeString(expected_dtype) << " expected, got "
+            << DataTypeString(dtype());
+    }
+
+    void Tensor::CheckTypeAndIsAligned(DataType expected_dtype) const {
+        CHECK_EQ(dtype(), expected_dtype)
+            << " " << DataTypeString(expected_dtype) << " expected, got "
+            << DataTypeString(dtype());
+        CHECK(IsAligned()) << "ptr = " << base<void>();
+    }
+
+    namespace {
+        template <typename T>
+            string SummarizeArray(int64 limit, int64 num_elts,
+                    const TensorShape& tensor_shape, const char* data) {
+                string ret;
+                const T* array = reinterpret_cast<const T*>(data);
+
+                const gtl::InlinedVector<int64, 4> shape = tensor_shape.dim_sizes();
+                for (int64 i = 0; i < limit; ++i) {
+                    if (i > 0) strings::StrAppend(&ret, " ");
+                    strings::StrAppend(&ret, array[i]);
+                }
+                if (num_elts > limit) strings::StrAppend(&ret, "...");
+                return ret;
+            }
+    }
+    string Tensor::SummarizeValue(int64 max_entries) const {
+        const int64 num_elts = NumElements();
+        if (max_entries < 0) {
+            max_entries = num_elts;
+        }
+        size_t limit = std::min(max_entries, num_elts);
+        if ((limit > 0) && (buf_ == nullptr)) {
+            return strings::StrCat("uninitialized Tensor of ", num_elts,
+                    " elements of type ", dtype());
+        }
+        const char* data = limit > 0 ? tensor_data().data() : nullptr;
+        switch(dtype()){
+            case DT_FLOAT:
+                return SummarizeArray<float>(limit, num_elts, shape_, data);
+                break;
+            case DT_DOUBLE:
+                return SummarizeArray<double>(limit, num_elts, shape_, data);
+                break;
+            case DT_UINT32:
+                return SummarizeArray<uint32>(limit, num_elts, shape_, data);
+                break;
+            case DT_INT32:
+                return SummarizeArray<int32>(limit, num_elts, shape_, data);
+                break;
+            case DT_UINT8:
+            case DT_QUINT8:
+                return SummarizeArray<uint8>(limit, num_elts, shape_, data);
+                break;
+            case DT_UINT64:
+                return SummarizeArray<uint64>(limit, num_elts, shape_, data);
+                break;
+            case DT_INT64:
+                return SummarizeArray<int64>(limit, num_elts, shape_, data);
+                break;
+            default:
+                return "";
+        }
     }
 
 

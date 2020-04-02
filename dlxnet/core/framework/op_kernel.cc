@@ -610,6 +610,10 @@ namespace dlxnet{
             tracking_state_ = absl::make_unique<TrackingState>();
         }
     }
+    template <>
+        const Eigen::ThreadPoolDevice& OpKernelContext::eigen_device() const {
+            return eigen_cpu_device();
+        }
 
     // OpKernel registration ------------------------------------------------------
 

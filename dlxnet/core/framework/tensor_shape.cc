@@ -79,12 +79,12 @@ namespace dlxnet{
         }
 
     bool TensorShape::IsSameSize(const TensorShape& b) const {
-    if (b.dims() != dims()) return false;
-    for (int d = 0; d < dims(); d++) {
-      if (dim_size(d) != b.dim_size(d)) return false;
+        if (b.dims() != dims()) return false;
+        for (int d = 0; d < dims(); d++) {
+            if (dim_size(d) != b.dim_size(d)) return false;
+        }
+        return true;
     }
-    return true;
-  }
 
     void TensorShape::CheckDimsEqual(int NDIMS) const {
         CHECK_EQ(NDIMS, dims()) << "Asking for tensor of " << NDIMS << " dimensions"
@@ -113,6 +113,13 @@ namespace dlxnet{
             // unknown_shape() set, and it seems hard to remove this without backwards
             // compatibility issues.
             return true;
+        }
+
+    template <class Shape>
+        TensorShapeBase<Shape>::TensorShapeBase(gtl::ArraySlice<int64> dim_sizes) {
+            set_tag(REP16);
+            set_data_type(DT_INVALID);
+            InitDims(dim_sizes);
         }
 
     template <class Shape>
@@ -284,10 +291,12 @@ namespace dlxnet{
         }
 
     template <class Shape>
-        TensorShapeBase<Shape>::TensorShapeBase(gtl::ArraySlice<int64> dim_sizes) {
-            set_tag(REP16);
-            set_data_type(DT_INVALID);
-            InitDims(dim_sizes);
+        gtl::InlinedVector<int64, 4> TensorShapeBase<Shape>::dim_sizes() const {
+            gtl::InlinedVector<int64, 4> result;
+            for (auto dim : *this) {
+                result.push_back(dim);
+            }
+            return result;
         }
 
     template <class Shape>
