@@ -241,6 +241,13 @@ namespace dlxnet{
             // `dest` and returns it. Does not update dest's NodeDef.
             const Edge* AddEdge(Node* source, int x, Node* dest, int y);
 
+            // Removes edge from the graph. Does not update the destination node's
+            // NodeDef.
+            // REQUIRES: The edge must exist.
+            void RemoveEdge(const Edge* edge);
+
+            Status IsValidNode(const Node* node) const;
+
             // The number of live nodes in the graph.
             //
             // Because nodes can be removed from the graph, num_nodes() is often

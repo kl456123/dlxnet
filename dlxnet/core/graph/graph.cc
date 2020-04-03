@@ -83,6 +83,39 @@ namespace dlxnet{
             DCHECK_EQ(0, InternDeviceName(""));
         }
 
+    void Graph::RemoveEdge(const Edge* e) {
+        TF_DCHECK_OK(IsValidNode(e->src_)) << e->src_->DebugString();
+        TF_DCHECK_OK(IsValidNode(e->dst_)) << e->dst_->DebugString();
+        CHECK_EQ(e->src_->out_edges_.erase(e), size_t{1});
+        CHECK_EQ(e->dst_->in_edges_.erase(e), size_t{1});
+        CHECK_EQ(e, edges_[e->id_]);
+        CHECK_GT(num_edges_, 0);
+
+        edges_[e->id_] = nullptr;
+        free_edges_.push_back(const_cast<Edge*>(e));
+        --num_edges_;
+    }
+
+    Status Graph::IsValidNode(const Node* node) const {
+        if (node == nullptr) {
+            return errors::InvalidArgument("Node is null");
+        }
+        const int id = node->id();
+        if (id < 0) {
+            return errors::InvalidArgument("node id ", id, " is less than zero");
+        }
+        if (static_cast<size_t>(id) >= nodes_.size()) {
+            return errors::InvalidArgument(
+                    "node id ", id, " is >= than number of nodes in graph ", nodes_.size());
+        }
+        if (nodes_[id] != node) {
+            return errors::InvalidArgument("Node with id ", id,
+                    " is different from the passed in node. "
+                    "Does it belong to a different graph?");
+        }
+        return Status::OK();
+    }
+
     int Graph::InternDeviceName(const string& device_name){
         if(device_name.empty()){
             // avoid lookup in table

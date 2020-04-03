@@ -26,6 +26,9 @@ namespace dlxnet{
                 client_device_ = device;
             }
 
+            // Returns a pointer to the device designated as the "client".
+            Device* client_device() const { return client_device_; }
+
             void FindMatchingDevices(const DeviceNameUtils::ParsedName& spec,
                     std::vector<Device*>* devices) const;
             Device* FindDeviceByName(const string& name) const;

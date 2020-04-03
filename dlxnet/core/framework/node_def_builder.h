@@ -21,14 +21,20 @@ namespace dlxnet{
             NodeDefBuilder& Input(StringPiece src_node, int src_index,  DataType dt);
             NodeDefBuilder& Device(StringPiece device_spec);
 
-            // set some attrs
-            NodeDefBuilder& Attr(StringPiece name, float value);
-            NodeDefBuilder& Attr(StringPiece name, int32 value);
+            // Sets the attr, if not already set.  If already set with a different
+            // value, an error will be returned from Finalize().
             NodeDefBuilder& Attr(StringPiece name, const AttrValue& value);
             NodeDefBuilder& Attr(StringPiece name, AttrValue&& value);
-            NodeDefBuilder& Attr(StringPiece name, const TensorProto& value);
-            NodeDefBuilder& Attr(StringPiece name, const Tensor& value);
+            NodeDefBuilder& Attr(StringPiece name, StringPiece value);
+            NodeDefBuilder& Attr(StringPiece name, const char* value);
+            NodeDefBuilder& Attr(StringPiece name, int32 value);
+            NodeDefBuilder& Attr(StringPiece name, int64 value);
+            NodeDefBuilder& Attr(StringPiece name, float value);
+            NodeDefBuilder& Attr(StringPiece name, double value);
+            NodeDefBuilder& Attr(StringPiece name, bool value);
             NodeDefBuilder& Attr(StringPiece name, DataType value);
+            NodeDefBuilder& Attr(StringPiece name, const Tensor& value);
+            NodeDefBuilder& Attr(StringPiece name, const TensorProto& value);
 
             Status Finalize(NodeDef* node_def);
 

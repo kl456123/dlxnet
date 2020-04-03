@@ -281,7 +281,7 @@ namespace dlxnet{
             DataType* value){
         const AttrValue* attr_value;
         TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));
-        TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, ""));
+        TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, "type"));
         const auto& v = attr_value->type();
         *value = v;
         return Status::OK();
@@ -300,7 +300,7 @@ namespace dlxnet{
             bool* value){
         const AttrValue* attr_value;
         TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));
-        // TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, ""));
+        TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, "bool"));
         const auto& v = attr_value->b();
         *value = v;
         return Status::OK();

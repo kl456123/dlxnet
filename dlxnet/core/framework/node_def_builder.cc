@@ -170,13 +170,13 @@ namespace dlxnet{
         return Attr(name, attr_value);                                  \
     }
 
-    // ATTR(StringPiece)
-    // ATTR(const char*)
-    ATTR(int32)
-        // ATTR(int64)
+    ATTR(StringPiece)
+        ATTR(const char*)
+        ATTR(int32)
+        ATTR(int64)
         ATTR(float)
-        // ATTR(double)
-        // ATTR(bool)
+        ATTR(double)
+        ATTR(bool)
         ATTR(DataType)
         ATTR(const Tensor&)
         ATTR(const TensorProto&)

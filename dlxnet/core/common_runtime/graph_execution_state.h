@@ -8,6 +8,7 @@
 #include "dlxnet/core/framework/graph.pb.h"
 #include "dlxnet/core/public/session_options.h"
 #include "dlxnet/core/common_runtime/build_graph_options.h"
+#include "dlxnet/core/graph/subgraph.h"
 
 
 
@@ -29,6 +30,18 @@ namespace dlxnet{
         string session_handle;
     };
 
+    // A ClientGraph is simply a sub-graph of the full graph as induced by
+    // BuildGraphOptions.
+    struct ClientGraph {
+        explicit ClientGraph(DataTypeVector feed_types, DataTypeVector fetch_types)
+            : graph(OpRegistry::Global()),
+            feed_types(std::move(feed_types)),
+            fetch_types(std::move(fetch_types)){}
+        Graph graph;
+        DataTypeVector feed_types;
+        DataTypeVector fetch_types;
+    };
+
     class GraphExecutionState{
         public:
             // base graph
@@ -45,7 +58,7 @@ namespace dlxnet{
             // and the caller takes the ownership of "*out". Otherwise, returns
             // an error.
             Status BuildGraph(const BuildGraphOptions& options,
-                    std::unique_ptr<Graph>* out);
+                    std::unique_ptr<ClientGraph>* out);
 
             // The graph returned by BuildGraph may contain only the pruned
             // graph, whereas some clients may want access to the full graph.
@@ -57,7 +70,8 @@ namespace dlxnet{
 
             // Extract the subset of the graph that needs to be run, adding feed/fetch
             // ops as needed.
-            Status PruneGraph(const BuildGraphOptions& options, Graph* graph);
+            Status PruneGraph(const BuildGraphOptions& options, Graph* graph,
+                    subgraph::RewriteGraphMetadata* out_rewrite_metadata);
 
             Status OptimizeGraph(
                     const BuildGraphOptions& options, std::unique_ptr<Graph>* optimized_graph);

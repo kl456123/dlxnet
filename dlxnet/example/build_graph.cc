@@ -20,7 +20,7 @@ Status TestMatMul(){
 
     auto b = Const(root, {{2, 2}, {1, 1}});
     // axb
-    string output_name = "m";
+    string output_name = "MatMul_1";
     auto matmul_attrs = MatMul::Attrs().TransposeA(false).TransposeB(false);
     auto m = MatMul(root, a, b, matmul_attrs);
 
@@ -37,6 +37,7 @@ Status TestMatMul(){
 
     std::vector<Tensor> out_tensors;
     TF_RETURN_IF_ERROR(session->Run({}, {output_name}, {}, &out_tensors));
+    std::cout<<out_tensors[0].DebugString()<<std::endl;
     return Status::OK();
 }
 

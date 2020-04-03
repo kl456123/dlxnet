@@ -225,6 +225,23 @@ namespace dlxnet{
 
         // get outputs from call frame
         if(outputs){
+            std::vector<Tensor> sorted_outputs;
+            const Status s = call_frame.ConsumeRetvals(
+                    &sorted_outputs, /* allow_dead_tensors = */ false);
+            if (errors::IsInternal(s)) {
+                return errors::InvalidArgument(s.error_message());
+            } else if (!s.ok()) {
+                return s;
+            }
+
+            outputs->clear();
+            size_t output_size = 0;
+            outputs->reserve(sorted_outputs.size());
+            for (int i = 0; i < output_names.size(); ++i) {
+                const string& output_name = output_names[i];
+                outputs->emplace_back(std::move(sorted_outputs[
+                            executors_and_keys->output_name_to_index[output_name]]));
+            }
         }
         return Status::OK();
     }
@@ -439,6 +456,18 @@ namespace dlxnet{
         std::unique_ptr<ExecutorsAndKeys> ek(new ExecutorsAndKeys);
         ek->callable_options = callable_options;
 
+        // For regular `Run()`, we use the function calling convention, and so
+        // maintain a mapping from input/output names to
+        // argument/return-value ordinal index.
+        for (int i = 0; i < callable_options.feed().size(); ++i) {
+            const string& input = callable_options.feed(i);
+            ek->input_name_to_index[input] = i;
+        }
+        for (int i = 0; i < callable_options.fetch().size(); ++i) {
+            const string& output = callable_options.fetch(i);
+            ek->output_name_to_index[output] = i;
+        }
+
         // create list of subgraphs
         BuildGraphOptions options;
         options.callable_options = callable_options;
@@ -523,7 +552,7 @@ namespace dlxnet{
         if (finalized_) {
             return errors::FailedPrecondition("Session has been finalized.");
         }
-        std::unique_ptr<Graph> client_graph;
+        std::unique_ptr<ClientGraph> client_graph;
         GraphExecutionState* execution_state = nullptr;
         //determine if place graph(subgraph) again or not
         if (options_.config.graph_options().place_pruned_graph()) {
@@ -538,7 +567,7 @@ namespace dlxnet{
         // Partition the graph across devices.
         PartitionOptions popts;
         std::unordered_map<string, GraphDef> partitions;
-        TF_RETURN_IF_ERROR(Partition(popts, client_graph.get(), &partitions));
+        TF_RETURN_IF_ERROR(Partition(popts, &client_graph->graph, &partitions));
 
         std::vector<string> device_names;
         for (auto device : devices_) {
@@ -587,8 +616,8 @@ namespace dlxnet{
             s = device_mgr_->LookupDevice(partition_name, &d);
             if (!s.ok()) break;
         }
-        // std::swap(*input_types, client_graph->feed_types);
-        // std::swap(*output_types, client_graph->fetch_types);
+        std::swap(*input_types, client_graph->feed_types);
+        std::swap(*output_types, client_graph->fetch_types);
         return s;
     }
 }
