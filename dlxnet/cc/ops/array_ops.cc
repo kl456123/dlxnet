@@ -4,8 +4,8 @@ namespace dlxnet{
     namespace ops{
         MatMul::MatMul(const ::dlxnet::Scope& scope, ::dlxnet::Input a,
                 ::dlxnet::Input b)
-        :MatMul(scope, a, b, MatMul::Attrs()){
-        }
+            :MatMul(scope, a, b, MatMul::Attrs()){
+            }
         MatMul::MatMul(const ::dlxnet::Scope& scope, ::dlxnet::Input a,
                 ::dlxnet::Input b, const MatMul::Attrs& attrs){
             if(!scope.ok())return ;
@@ -15,9 +15,15 @@ namespace dlxnet{
             const string unique_name = scope.GetUniqueNameForOp(op_name);
             auto builder = NodeBuilder(unique_name, op_name)
                 .Input(_a)
-                .Input(_b)
-                .Attr("transpose_a", attrs.transpose_a)
-                .Attr("transpose_b", attrs.transpose_b);
+                .Input(_b);
+
+            if(attrs.init_transpose_a){
+                builder.Attr("transpose_a", attrs.transpose_a);
+            }
+
+            if(attrs.init_transpose_b){
+                builder.Attr("transpose_b", attrs.transpose_b);
+            }
             scope.UpdateBuilder(&builder);
             ::dlxnet::Node* ret;
             scope.UpdateStatus(builder.Finalize(scope.graph(), &ret));
