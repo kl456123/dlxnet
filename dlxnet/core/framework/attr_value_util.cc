@@ -31,6 +31,7 @@ limitations under the License.
 #include "dlxnet/core/lib/strings/proto_serialization.h"
 #include "dlxnet/core/lib/str_util.h"
 #include "dlxnet/core/platform/protobuf.h"
+#include "dlxnet/core/lib/strings/proto_text_util.h"
 
 namespace dlxnet {
 namespace {
@@ -451,8 +452,7 @@ bool ParseAttrValue(StringPiece type, StringPiece text, AttrValue* out) {
     to_parse = strings::StrCat(field_name, ": ", text);
   }
 
-  // return ProtoParseFromString(to_parse, out);
-  return true;
+  return ProtoParseFromString(to_parse, out);
 }
 
 void SetAttrValue(const AttrValue& value, AttrValue* out) { *out = value; }

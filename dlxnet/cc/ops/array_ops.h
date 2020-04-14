@@ -19,20 +19,24 @@ namespace dlxnet{
                     TF_MUST_USE_RESULT Attrs TransposeA(bool x){
                         Attrs ret = *this;
                         ret.transpose_a = x;
+                        ret.init_transpose_a = true;
                         return ret;
                     }
                     TF_MUST_USE_RESULT Attrs TransposeB(bool x){
                         Attrs ret = *this;
                         ret.transpose_b = x;
+                        ret.init_transpose_b = true;
                         return ret;
                     }
                     bool transpose_a=false;
                     bool transpose_b = false;
+                    bool init_transpose_a = false;
+                    bool init_transpose_b = false;
                 };
                 MatMul(const ::dlxnet::Scope& scope, ::dlxnet::Input a,
-                ::dlxnet::Input b, const MatMul::Attrs& attrs);
+                        ::dlxnet::Input b, const MatMul::Attrs& attrs);
                 MatMul(const ::dlxnet::Scope& scope, ::dlxnet::Input a,
-                ::dlxnet::Input b);
+                        ::dlxnet::Input b);
                 operator ::dlxnet::Input()const{return product;}
                 ::dlxnet::Node* product;
 

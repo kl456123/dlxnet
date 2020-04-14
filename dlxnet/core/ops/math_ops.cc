@@ -12,8 +12,8 @@ namespace dlxnet{
         .Input("a: T")
         .Input("b: T")
         .Output("product: T")
-        .Attr("transpose_a: bool")
-        .Attr("transpose_b: bool")
+        .Attr("transpose_a: bool = false")
+        .Attr("transpose_b: bool = true")
         .Attr("T: {float, double, int32, int64}")
         .SetShapeFn(shape_inference::MatMulShape);
 

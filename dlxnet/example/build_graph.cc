@@ -21,8 +21,7 @@ Status TestMatMul(){
     auto b = Const(root, {{2, 2}, {1, 1}});
     // axb
     string output_name = "MatMul_1";
-    auto matmul_attrs = MatMul::Attrs().TransposeA(false).TransposeB(false);
-    auto m = MatMul(root, a, b, matmul_attrs);
+    auto m = MatMul(root, a, b);
 
     auto m2 = MatMul(root, m, b);
 
