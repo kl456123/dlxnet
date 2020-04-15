@@ -16,8 +16,8 @@ limitations under the License.
 #ifndef DLXNET_CORE_UTIL_ENV_VAR_H_
 #define DLXNET_CORE_UTIL_ENV_VAR_H_
 
-#include "dlxnet/core/lib/status.h"
-#include "dlxnet/core/lib/stringpiece.h"
+#include "dlxnet/core/lib/core/status.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
 #include "dlxnet/core/platform/types.h"
 
 namespace dlxnet {

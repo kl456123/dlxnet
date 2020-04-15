@@ -21,9 +21,9 @@ limitations under the License.
 
 #include "dlxnet/core/framework/op_def_builder.h"
 #include "dlxnet/core/framework/op_kernel.h"
-#include "dlxnet/core/lib/errors.h"
+#include "dlxnet/core/lib/core/errors.h"
 #include "dlxnet/core/lib/gtl/map_util.h"
-#include "dlxnet/core/lib/str_util.h"
+#include "dlxnet/core/lib/strings/str_util.h"
 #include "dlxnet/core/platform/host_info.h"
 #include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/platform/mutex.h"

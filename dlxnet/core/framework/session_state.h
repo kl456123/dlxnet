@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "dlxnet/core/framework/tensor.h"
-#include "dlxnet/core/lib/errors.h"
+#include "dlxnet/core/lib/core/errors.h"
 #include "dlxnet/core/platform/mutex.h"
 
 namespace dlxnet{

@@ -18,9 +18,9 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "dlxnet/core/lib/stringpiece.h"
-#include "dlxnet/core/lib/str_util.h"
-#include "dlxnet/core/lib/stringprintf.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
+#include "dlxnet/core/lib/strings/str_util.h"
+#include "dlxnet/core/lib/strings/stringprintf.h"
 #include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/util/command_line_flags.h"
 

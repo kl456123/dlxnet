@@ -3,7 +3,7 @@
 #include <vector>
 #include <memory>
 
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/graph/graph.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
 #include "dlxnet/core/framework/device_attributes.pb.h"

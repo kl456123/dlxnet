@@ -7,7 +7,7 @@
 #include "dlxnet/core/framework/node_def.pb.h"
 #include "dlxnet/core/lib/core/threadpool_interface.h"
 #include "dlxnet/core/lib/core/notification.h"
-#include "dlxnet/core/lib/errors.h"
+#include "dlxnet/core/lib/core/errors.h"
 #include "dlxnet/core/common_runtime/device.h"
 #include "dlxnet/core/graph/graph.h"
 

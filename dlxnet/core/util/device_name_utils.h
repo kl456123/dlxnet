@@ -18,8 +18,8 @@ limitations under the License.
 
 #include <string>
 
-#include "dlxnet/core/lib/status.h"
-#include "dlxnet/core/lib/stringpiece.h"
+#include "dlxnet/core/lib/core/status.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
 
 namespace dlxnet {
 

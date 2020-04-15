@@ -1,6 +1,6 @@
 #ifndef DLXNET_CORE_FRAMEWORK_FUNCTION_H_
 #define DLXNET_CORE_FRAMEWORK_FUNCTION_H_
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/framework/tensor.h"
 #include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/framework/op.h"

@@ -3,7 +3,7 @@
 #include <functional>
 #include <vector>
 
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/framework/tensor_shape.h"
 #include "dlxnet/core/framework/tensor.h"
 #include "dlxnet/core/framework/node_def.pb.h"

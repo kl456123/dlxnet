@@ -19,8 +19,8 @@ limitations under the License.
 
 #include "dlxnet/core/framework/allocator_registry.h"
 #include "dlxnet/core/framework/tracking_allocator.h"
-#include "dlxnet/core/lib/strcat.h"
-#include "dlxnet/core/lib/stringprintf.h"
+#include "dlxnet/core/lib/strings/strcat.h"
+#include "dlxnet/core/lib/strings/stringprintf.h"
 #include "dlxnet/core/platform/mem.h"
 #include "dlxnet/core/platform/mutex.h"
 #include "dlxnet/core/platform/types.h"

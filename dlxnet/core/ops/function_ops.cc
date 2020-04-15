@@ -3,7 +3,7 @@
 #include "dlxnet/core/framework/common_shape_fns.h"
 #include "dlxnet/core/framework/shape_inference.h"
 #include "dlxnet/core/framework/tensor_shape.pb.h"
-#include "dlxnet/core/lib/errors.h"
+#include "dlxnet/core/lib/core/errors.h"
 
 namespace dlxnet{
     REGISTER_SYSTEM_OP("_Arg")

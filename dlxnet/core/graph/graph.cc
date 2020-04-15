@@ -1,5 +1,5 @@
 #include "dlxnet/core/graph/graph.h"
-#include "dlxnet/core/lib/stringprintf.h"
+#include "dlxnet/core/lib/strings/stringprintf.h"
 
 
 namespace dlxnet{

@@ -3,8 +3,8 @@
 #include <unordered_map>
 
 #include "dlxnet/core/common_runtime/gpu/gpu_id.h"
-#include "dlxnet/core/lib/errors.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/errors.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/platform/mutex.h"

@@ -23,11 +23,11 @@ limitations under the License.
 #include "dlxnet/core/framework/attr_value_util.h"
 #include "dlxnet/core/framework/op_def_util.h"
 #include "dlxnet/core/framework/types.h"
-#include "dlxnet/core/lib/errors.h"
+#include "dlxnet/core/lib/core/errors.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
 #include "dlxnet/core/lib/strings/scanner.h"
-#include "dlxnet/core/lib/str_util.h"
-#include "dlxnet/core/lib/strcat.h"
+#include "dlxnet/core/lib/strings/str_util.h"
+#include "dlxnet/core/lib/strings/strcat.h"
 
 using ::dlxnet::strings::Scanner;
 

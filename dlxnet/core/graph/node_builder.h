@@ -1,7 +1,7 @@
 #ifndef DLXNET_CORE_GRAPH_NODE_BUILDER_H_
 #define DLXNET_CORE_GRAPH_NODE_BUILDER_H_
 #include "dlxnet/core/platform/types.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/graph/graph.h"
 #include "dlxnet/core/framework/types.pb.h"
 #include "dlxnet/core/framework/op_def.pb.h"

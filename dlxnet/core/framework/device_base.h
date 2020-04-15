@@ -1,9 +1,9 @@
 #ifndef DLXNET_CORE_FRAMEWORK_DEVICE_BASE_H_
 #define DLXNET_CORE_FRAMEWORK_DEVICE_BASE_H_
 #include "dlxnet/core/platform/refcount.h"
-#include "dlxnet/core/lib/errors.h"
-#include "dlxnet/core/lib/status.h"
-#include "dlxnet/core/lib/stringpiece.h"
+#include "dlxnet/core/lib/core/errors.h"
+#include "dlxnet/core/lib/core/status.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
 #include "dlxnet/core/framework/tensor.h"
 #include "dlxnet/core/framework/allocator.h"
 

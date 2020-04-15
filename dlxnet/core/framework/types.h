@@ -6,7 +6,7 @@
 #include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/platform/types.h"
 #include "dlxnet/core/framework/types.pb.h"
-#include "dlxnet/core/lib/stringpiece.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
 
 
 namespace dlxnet{

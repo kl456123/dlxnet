@@ -1,7 +1,7 @@
 #ifndef DLXNET_CORE_COMMON_RUNTIME_GPU_GPU_ID_MANAGER_H_
 #define DLXNET_CORE_COMMON_RUNTIME_GPU_GPU_ID_MANAGER_H_
 #include "dlxnet/core/common_runtime/gpu/gpu_id.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 
 namespace dlxnet{
     // Class that maintains a map from TfGpuId to PlatformGpuId, and manages the

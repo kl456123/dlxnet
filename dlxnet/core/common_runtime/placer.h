@@ -1,6 +1,6 @@
 #ifndef DLXNET_CORE_COMMON_RUNTIME_PLACER_H_
 #define DLXNET_CORE_COMMON_RUNTIME_PLACER_H_
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 
 
 namespace dlxnet{

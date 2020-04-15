@@ -4,7 +4,7 @@
 #include "dlxnet/core/framework/device_base.h"
 #include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/framework/op_kernel.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/util/device_name_utils.h"
 #include "dlxnet/core/graph/types.h"

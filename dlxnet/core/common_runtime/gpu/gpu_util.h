@@ -1,6 +1,6 @@
 #ifndef DLXNET_CORE_COMMON_RUNTIME_GPU_GPU_UTIL_H_
 #define DLXNET_CORE_COMMON_RUNTIME_GPU_GPU_UTIL_H_
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/common_runtime/device.h"
 
 namespace dlxnet{

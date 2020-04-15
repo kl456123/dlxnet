@@ -23,8 +23,8 @@ limitations under the License.
 // non-const method, all threads accessing the same StringPiece must use
 // external synchronization.
 
-#ifndef DLXNET_CORE_LIB_STRINGPIECE_H_
-#define DLXNET_CORE_LIB_STRINGPIECE_H_
+#ifndef DLXNET_CORE_LIB_CORE_STRINGPIECE_H_
+#define DLXNET_CORE_LIB_CORE_STRINGPIECE_H_
 
 #include "dlxnet/core/platform/stringpiece.h"
 

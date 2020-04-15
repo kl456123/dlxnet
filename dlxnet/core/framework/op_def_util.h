@@ -22,7 +22,7 @@ limitations under the License.
 #include <string>
 #include "dlxnet/core/framework/api_def.pb.h"
 #include "dlxnet/core/framework/op_def.pb.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/platform/protobuf.h"
 
 namespace dlxnet {

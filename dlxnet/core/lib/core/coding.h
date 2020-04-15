@@ -1,6 +1,6 @@
 #ifndef DLXNET_CORE_LIB_CORE_CODING_H_
 #define DLXNET_CORE_LIB_CORE_CODING_H_
-#include "dlxnet/core/lib/stringpiece.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
 #include "dlxnet/core/platform/types.h"
 
 namespace dlxnet{

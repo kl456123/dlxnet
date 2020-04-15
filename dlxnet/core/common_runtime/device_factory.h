@@ -19,7 +19,7 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/platform/types.h"
 
 namespace dlxnet {

@@ -22,8 +22,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 #include "dlxnet/core/framework/op_def.pb.h"
-#include "dlxnet/core/lib/status.h"
-#include "dlxnet/core/lib/stringpiece.h"
+#include "dlxnet/core/lib/core/status.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
 #include "dlxnet/core/platform/macros.h"
 
 namespace dlxnet {

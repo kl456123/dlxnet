@@ -5,7 +5,7 @@
 
 #include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/lib/gtl/iterator_range.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/framework/graph.pb.h"
 #include "dlxnet/core/framework/node_def_util.h"
 #include "dlxnet/core/graph/edgeset.h"

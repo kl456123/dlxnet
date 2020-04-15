@@ -18,8 +18,8 @@ limitations under the License.
 #include <unordered_map>
 
 #include "dlxnet/core/graph/graph.h"
-#include "dlxnet/core/lib/errors.h"
-#include "dlxnet/core/lib/str_util.h"
+#include "dlxnet/core/lib/core/errors.h"
+#include "dlxnet/core/lib/strings/str_util.h"
 #include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/platform/mutex.h"
 #include "dlxnet/core/platform/types.h"

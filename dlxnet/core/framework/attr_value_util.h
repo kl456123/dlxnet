@@ -24,8 +24,8 @@ limitations under the License.
 #include "dlxnet/core/framework/tensor.h"
 #include "dlxnet/core/framework/tensor_shape.h"
 #include "dlxnet/core/framework/types.h"
-#include "dlxnet/core/lib/status.h"
-#include "dlxnet/core/lib/stringpiece.h"
+#include "dlxnet/core/lib/core/status.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
 
 namespace dlxnet {

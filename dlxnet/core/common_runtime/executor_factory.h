@@ -18,8 +18,8 @@ limitations under the License.
 
 #include <string>
 
-#include "dlxnet/core/lib/errors.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/errors.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
 #include "dlxnet/core/platform/types.h"
 

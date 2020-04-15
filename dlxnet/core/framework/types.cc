@@ -16,8 +16,8 @@ limitations under the License.
 #include "dlxnet/core/framework/types.h"
 // #include "dlxnet/core/framework/register_types.h"
 
-#include "dlxnet/core/lib/str_util.h"
-#include "dlxnet/core/lib/strcat.h"
+#include "dlxnet/core/lib/strings/str_util.h"
+#include "dlxnet/core/lib/strings/strcat.h"
 #include "dlxnet/core/platform/logging.h"
 
 namespace dlxnet{

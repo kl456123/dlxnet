@@ -17,10 +17,10 @@ limitations under the License.
 
 #include <stdlib.h>
 
-#include "dlxnet/core/lib/errors.h"
+#include "dlxnet/core/lib/core/errors.h"
 #include "dlxnet/core/lib/strings/numbers.h"
-#include "dlxnet/core/lib/str_util.h"
-#include "dlxnet/core/lib/strcat.h"
+#include "dlxnet/core/lib/strings/str_util.h"
+#include "dlxnet/core/lib/strings/strcat.h"
 #include "dlxnet/core/platform/logging.h"
 
 namespace dlxnet {

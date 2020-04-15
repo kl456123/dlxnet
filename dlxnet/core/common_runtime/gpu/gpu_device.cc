@@ -1,6 +1,6 @@
 #include "dlxnet/core/common_runtime/gpu/gpu_device.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_id_manager.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/lib/core/notification.h"
 #include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_util.h"

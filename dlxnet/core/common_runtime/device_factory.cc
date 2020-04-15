@@ -21,8 +21,8 @@ limitations under the License.
 #include <vector>
 
 #include "dlxnet/core/common_runtime/device.h"
-#include "dlxnet/core/lib/errors.h"
-#include "dlxnet/core/lib/strcat.h"
+#include "dlxnet/core/lib/core/errors.h"
+#include "dlxnet/core/lib/strings/strcat.h"
 #include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/platform/mutex.h"
 #include "dlxnet/core/platform/types.h"

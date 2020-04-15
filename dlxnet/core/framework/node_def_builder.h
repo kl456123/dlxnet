@@ -6,7 +6,7 @@
 #include "dlxnet/core/framework/op.h"
 #include "dlxnet/core/framework/node_def_util.h"
 #include "dlxnet/core/framework/attr_value_util.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 
 namespace dlxnet{
     class NodeDefBuilder;

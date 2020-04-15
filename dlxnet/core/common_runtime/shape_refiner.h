@@ -4,7 +4,7 @@
 
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/platform/types.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/framework/shape_inference.h"
 #include "dlxnet/core/graph/graph.h"
 #include "dlxnet/core/framework/op.h"

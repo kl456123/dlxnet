@@ -2,7 +2,7 @@
 #define DLXNET_CORE_GRAPH_TENSOR_H_
 
 #include "dlxnet/core/platform/types.h"
-#include "dlxnet/core/lib/strcat.h"
+#include "dlxnet/core/lib/strings/strcat.h"
 #include "dlxnet/core/lib/hash/hash.h"
 
 namespace dlxnet{

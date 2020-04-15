@@ -4,7 +4,7 @@
 
 #include "dlxnet/core/framework/graph.pb.h"
 #include "dlxnet/core/graph/graph.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 
 namespace dlxnet{
     struct PartitionOptions{

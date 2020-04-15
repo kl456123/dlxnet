@@ -17,8 +17,8 @@ limitations under the License.
 
 #include <iostream>
 
-#include "dlxnet/core/lib/str_util.h"
-#include "dlxnet/core/lib/strcat.h"
+#include "dlxnet/core/lib/strings/str_util.h"
+#include "dlxnet/core/lib/strings/strcat.h"
 
 namespace dlxnet {
 

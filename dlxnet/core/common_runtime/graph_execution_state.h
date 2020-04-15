@@ -4,7 +4,7 @@
 #include "dlxnet/core/graph/graph.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/common_runtime/device_set.h"
-#include "dlxnet/core/lib/status.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/framework/graph.pb.h"
 #include "dlxnet/core/public/session_options.h"
 #include "dlxnet/core/common_runtime/build_graph_options.h"

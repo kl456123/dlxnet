@@ -4,9 +4,9 @@
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/framework/op.h"
 #include "dlxnet/core/framework/types.h"
-#include "dlxnet/core/lib/status.h"
-#include "dlxnet/core/platform/logging.h"
+#include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/lib/gtl/flatmap.h"
+#include "dlxnet/core/platform/logging.h"
 #include "dlxnet/core/common_runtime/shape_refiner.h"
 #include "dlxnet/core/framework/node_def_util.h"
 

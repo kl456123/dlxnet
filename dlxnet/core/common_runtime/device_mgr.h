@@ -7,12 +7,12 @@
 #include <vector>
 
 #include "dlxnet/core/common_runtime/device.h"
-#include "dlxnet/core/lib/status.h"
-#include "dlxnet/core/lib/stringpiece.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/platform/types.h"
-#include "dlxnet/core/lib/gtl/array_slice.h"
 #include  "dlxnet/core/platform/hash.h"
+#include "dlxnet/core/lib/gtl/array_slice.h"
+#include "dlxnet/core/lib/core/status.h"
+#include "dlxnet/core/lib/core/stringpiece.h"
 #include "dlxnet/core/lib/core/arena.h"
 
 

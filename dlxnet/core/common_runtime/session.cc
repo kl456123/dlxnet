@@ -3,7 +3,7 @@
 #include <string>
 
 #include "dlxnet/core/common_runtime/session_factory.h"
-#include "dlxnet/core/lib/errors.h"
+#include "dlxnet/core/lib/core/errors.h"
 #include "dlxnet/core/platform/logging.h"
 
 
