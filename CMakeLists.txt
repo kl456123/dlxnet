@@ -16,6 +16,9 @@ add_definitions(-DPLATFORM_POSIX)
 
 option(BUILD_TEST "BUILD TEST" ON)
 option(BUILD_DEMO "BUILD DEMO" ON)
+option(BUILD_CUDA "BUILD CUDA" OFF)
+option(BUILD_OPENGL "BUILD OPENGL" OFF)
+option(BUILD_OPENCL "BUILD OPENCL" OFF)
 
 find_package(Protobuf REQUIRED)
 find_package(Eigen3 REQUIRED NO_MODULE)
@@ -76,6 +79,11 @@ link_directories(${CMAKE_CURRENT_BINARY_DIR}/third_party/double-conversion/)
 set(DLXNET_DEPEND -pthread ${Protobuf_LIBRARIES}
     ${ABSL_LIBRARIES} ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES}
     -ldl -ldouble-conversion ${NSYNC_LIBRARIES})
+
+
+if (BUILD_CUDA)
+    add_definitions(-DGOOGLE_CUDA)
+endif()
 
 
 # build lib

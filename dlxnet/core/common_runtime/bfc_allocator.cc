@@ -16,11 +16,18 @@ namespace dlxnet{
             const AllocationAttributes& allocation_attr) {
         VLOG(1) << "AllocateRaw " << Name() << "  " << num_bytes;
 
+
+        // just delegate now
+        void* mem_addr = sub_allocator_->Alloc(unused_alignment, num_bytes);
+        return mem_addr;
     }
 
     void BFCAllocator::DeallocateRaw(void* ptr) {
         VLOG(1) << "DeallocateRaw " << Name() << " "
             << (ptr ? RequestedSize(ptr) : 0);
+
+        // just delegate now
+        sub_allocator_->Free(ptr, 0);
     }
     bool BFCAllocator::TracksAllocationSizes() const { return true; }
 

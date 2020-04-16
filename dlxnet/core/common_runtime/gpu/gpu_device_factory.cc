@@ -1,4 +1,5 @@
 #include "dlxnet/core/common_runtime/gpu/gpu_device.h"
+#include "dlxnet/core/common_runtime/gpu/gpu_process_state.h"
 
 
 namespace dlxnet{
@@ -20,12 +21,12 @@ namespace dlxnet{
             Allocator* GetAllocator(AllocatorAttributes attr) override {
                 CHECK(cpu_allocator_) << "bad place 1";
                 if (attr.on_host()) {
-                    // if (attr.gpu_compatible() || force_gpu_compatible_) {
-                    // GPUProcessState* ps = GPUProcessState::singleton();
-                    // return ps->GetGpuHostAllocator(0);
-                    // } else {
-                    return cpu_allocator_;
-                    // }
+                    if (attr.gpu_compatible() || force_gpu_compatible_) {
+                        GPUProcessState* ps = GPUProcessState::singleton();
+                        return ps->GetGpuHostAllocator(0);
+                    } else {
+                        return cpu_allocator_;
+                    }
                 } else {
                     return gpu_allocator_;
                 }

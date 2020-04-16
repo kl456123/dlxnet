@@ -1,3 +1,5 @@
+#ifndef DLXNET_CORE_COMMON_RUNTIME_GPU_GPU_BFC_ALLOCATOR_H_
+#define DLXNET_CORE_COMMON_RUNTIME_GPU_GPU_BFC_ALLOCATOR_H_
 #include "dlxnet/core/common_runtime/bfc_allocator.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_mem_allocator.h"
 #include "dlxnet/core/protobuf/config.pb.h"
@@ -19,3 +21,5 @@ namespace dlxnet{
             static bool GetGarbageCollectionValue();
     };
 }//namespace dlxnet
+
+#endif

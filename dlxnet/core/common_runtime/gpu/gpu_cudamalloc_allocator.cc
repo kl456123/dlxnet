@@ -1,3 +1,6 @@
+#ifdef GOOGLE_CUDA
+#include "third_party/gpus/cuda/include/cuda.h"
+#endif  // GOOGLE_CUDA
 #include "dlxnet/core/common_runtime/gpu/gpu_cudamalloc_allocator.h"
 
 namespace dlxnet{

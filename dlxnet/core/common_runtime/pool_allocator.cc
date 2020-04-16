@@ -20,9 +20,11 @@ namespace dlxnet{
     PoolAllocator::~PoolAllocator() {}
 
     void PoolAllocator::DeallocateRaw(void* ptr) {
+        allocator_->Free(ptr, 0);
     }
 
     void* PoolAllocator::AllocateRaw(size_t alignment, size_t num_bytes) {
+        void* ptr = allocator_->Alloc(alignment, num_bytes);
     }
 
     void* BasicCPUAllocator::Alloc(size_t alignment, size_t num_bytes) {
