@@ -30,6 +30,7 @@ include_directories(${CMAKE_CURRENT_LIST_DIR})
 
 set(SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/dlxnet/core)
 set(SRC_DIR ${SRC_DIR} ${CMAKE_CURRENT_LIST_DIR}/dlxnet/cc)
+set(SRC_DIR ${SRC_DIR} ${CMAKE_CURRENT_LIST_DIR}/dlxnet/stream_executor)
 
 
 # find all files
@@ -82,6 +83,12 @@ set(DLXNET_DEPEND -pthread ${Protobuf_LIBRARIES}
 
 
 if (BUILD_CUDA)
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode arch=compute_61,code=sm_61;-std=c++11;)
+    find_package(CUDA QUIET REQUIRED)
+    set(CUDA_SEPARABLE_COMPILATION OFF)
+    set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+    # set(CUDA_HOST_COMPILER clang++)
+
     add_definitions(-DGOOGLE_CUDA)
 endif()
 

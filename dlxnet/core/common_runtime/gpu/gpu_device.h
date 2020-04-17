@@ -64,7 +64,7 @@ namespace dlxnet{
                     const Tensor& from, Tensor* to,
                     StatusCallback done);
             string ComputeOpKernelDebugString(const OpKernel& op_kernel,
-                                      const int& stream_id);
+                    const int& stream_id);
 
     };
 
