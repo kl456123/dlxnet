@@ -17,18 +17,18 @@ limitations under the License.
 #define DLXNET_STREAM_EXECUTOR_CUDA_CUDA_PLATFORM_H_
 
 #include <memory>
-#include "stream_executor/platform/port.h"
+#include "dlxnet/stream_executor/platform/port.h"
 #include <vector>
 
-#include "stream_executor/executor_cache.h"
-#include "stream_executor/lib/statusor.h"
-#include "stream_executor/multi_platform_manager.h"
-#include "stream_executor/platform.h"
-#include "stream_executor/platform/port.h"
-#include "stream_executor/platform/thread_annotations.h"
-#include "stream_executor/stream_executor_internal.h"
-#include "stream_executor/stream_executor_pimpl.h"
-#include "stream_executor/trace_listener.h"
+#include "dlxnet/stream_executor/executor_cache.h"
+#include "dlxnet/stream_executor/lib/statusor.h"
+#include "dlxnet/stream_executor/multi_platform_manager.h"
+#include "dlxnet/stream_executor/platform.h"
+#include "dlxnet/stream_executor/platform/port.h"
+#include "dlxnet/stream_executor/platform/thread_annotations.h"
+#include "dlxnet/stream_executor/stream_executor_internal.h"
+#include "dlxnet/stream_executor/stream_executor_pimpl.h"
+#include "dlxnet/stream_executor/trace_listener.h"
 
 namespace stream_executor {
 namespace cuda {
