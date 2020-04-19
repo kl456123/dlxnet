@@ -105,6 +105,10 @@ if (BUILD_DEMO)
     add_executable(build_graph ${CMAKE_CURRENT_LIST_DIR}/dlxnet/example/build_graph.cc)
     target_link_libraries(main dlxnet)
     target_link_libraries(build_graph dlxnet)
+
+    # se demo
+    add_executable(demo_se ${CMAKE_CURRENT_LIST_DIR}/dlxnet/example/demo_se.cc)
+    target_link_libraries(demo_se dlxnet)
 endif()
 
 # build test

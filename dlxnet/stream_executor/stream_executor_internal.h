@@ -14,9 +14,11 @@
 #include "dlxnet/stream_executor/device_options.h"
 #include "dlxnet/stream_executor/device_description.h"
 #include "dlxnet/stream_executor/kernel_cache_config.h"
+#include "dlxnet/stream_executor/kernel_spec.h"
+#include "dlxnet/stream_executor/kernel.h"
 #include "dlxnet/stream_executor/stream.h"
 #include "dlxnet/stream_executor/launch_dim.h"
-#include "dlnxet/stream_executor/device_memory.h"
+#include "dlxnet/stream_executor/device_memory.h"
 #include "dlxnet/stream_executor/event.h"
 #include "dlxnet/stream_executor/timer.h"
 #include "dlxnet/stream_executor/trace_listener.h"
@@ -119,6 +121,11 @@ namespace stream_executor{
                 virtual port::Status Init(int device_ordinal,
                         DeviceOptions device_options) = 0;
 
+                virtual port::Status GetKernel(const MultiKernelLoaderSpec &spec,
+                        KernelBase *kernel) {
+                    return port::UnimplementedError("Not Implemented");
+                }
+
                 virtual port::Status Launch(Stream *stream, const ThreadDim &thread_dims,
                         const BlockDim &block_dims, const KernelBase &k,
                         const KernelArgsArrayBase &args) {
@@ -129,6 +136,21 @@ namespace stream_executor{
                     return Allocate(size, /*memory_space=*/0);
                 }
                 virtual void Deallocate(DeviceMemoryBase *mem) = 0;
+
+                virtual port::Status SynchronousMemcpy(DeviceMemoryBase *gpu_dst,
+                        const void *host_src, uint64 size) = 0;
+                virtual port::Status SynchronousMemcpy(void *host_dst,
+                        const DeviceMemoryBase &gpu_src,
+                        uint64 size) = 0;
+                virtual port::Status SynchronousMemcpyDeviceToDevice(
+                        DeviceMemoryBase *gpu_dst, const DeviceMemoryBase &gpu_src,
+                        uint64 size) = 0;
+
+                virtual port::Status AllocateEvent(Event *event) = 0;
+                virtual port::Status DeallocateEvent(Event *event) = 0;
+                virtual port::Status RecordEvent(Stream *stream, Event *event) = 0;
+                virtual port::Status WaitForEvent(Stream *stream, Event *event) = 0;
+                virtual Event::Status PollForEventStatus(Event *event) = 0;
 
                 virtual bool AllocateStream(Stream *stream) = 0;
                 virtual void DeallocateStream(Stream *stream) = 0;
@@ -145,6 +167,9 @@ namespace stream_executor{
                 virtual bool DeviceMemoryUsage(int64 *free, int64 *total) const {
                     return false;
                 }
+
+                // Releases any state associated with the kernel.
+                virtual void UnloadKernel(const KernelBase *kernel) {}
 
                 // Creates a new DeviceDescription object. Ownership is transferred to the
                 // caller.

@@ -709,3 +709,5 @@ namespace stream_executor {
         };
 
 }//namespace stream_executor
+
+#endif

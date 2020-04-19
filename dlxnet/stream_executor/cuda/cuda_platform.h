@@ -27,7 +27,7 @@ limitations under the License.
 #include "dlxnet/stream_executor/platform/port.h"
 #include "dlxnet/stream_executor/platform/thread_annotations.h"
 #include "dlxnet/stream_executor/stream_executor_internal.h"
-#include "dlxnet/stream_executor/stream_executor_pimpl.h"
+#include "dlxnet/stream_executor/stream_executor.h"
 #include "dlxnet/stream_executor/trace_listener.h"
 
 namespace stream_executor {

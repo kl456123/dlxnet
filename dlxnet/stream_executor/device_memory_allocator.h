@@ -13,7 +13,7 @@
 #include "dlxnet/stream_executor/platform.h"
 
 namespace stream_executor {
-
+    class Stream;
     class DeviceMemoryAllocator;
     // Owning pointer for memory on a device.
     //
@@ -206,49 +206,6 @@ namespace stream_executor {
             const Platform* platform_;
     };
 
-    // Default memory allocator for a platform which uses
-    // StreamExecutor::Allocate/Deallocate.
-    class StreamExecutorMemoryAllocator : public DeviceMemoryAllocator {
-        public:
-            // Create an allocator supporting a single device, corresponding to the passed
-            // executor.
-            explicit StreamExecutorMemoryAllocator(StreamExecutor *executor);
-
-            // Create an allocator supporting multiple stream executors.
-            //
-            // Precondition: all stream_executors have different device ordinals.
-            StreamExecutorMemoryAllocator(
-                    const Platform *platform,
-                    absl::Span<StreamExecutor *const> stream_executors);
-
-            port::StatusOr<OwningDeviceMemory> Allocate(int device_ordinal, uint64 size,
-                    bool retry_on_failure,
-                    int64 memory_space) override;
-
-            // Pull in two-arg overload that sets retry_on_failure to true.
-            using DeviceMemoryAllocator::Allocate;
-
-            port::Status Deallocate(int device_ordinal, DeviceMemoryBase mem) override;
-
-            bool AllowsAsynchronousDeallocation() const override;
-
-            // Gets-or-creates a stream for a given `device_ordinal` from an appropriate
-            // stream executor.
-            port::StatusOr<Stream *> GetStream(int device_ordinal) override;
-
-            // Gets the stream executor for given device ordinal.
-            port::StatusOr<StreamExecutor *> GetStreamExecutor(int device_ordinal) const;
-
-        private:
-            // Available stream executors. Each stream executor has a different device
-            // ordinal.
-            std::vector<StreamExecutor *> stream_executors_;
-
-            absl::Mutex mutex_;
-
-            // Cache of streams for GetStream.
-            std::map<int, Stream> streams_ GUARDED_BY(mutex_);
-    };
 
     // Default memory allocator for a platform which uses
     // StreamExecutor::Allocate/Deallocate.

@@ -7,9 +7,13 @@
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/stream_executor/device_memory.h"
 #include "dlxnet/stream_executor/event.h"
+#include "dlxnet/stream_executor/kernel.h"
 #include "dlxnet/stream_executor/launch_dim.h"
+#include "dlxnet/stream_executor/lib/array_slice.h"
+#include "dlxnet/stream_executor/lib/status.h"
 #include "dlxnet/stream_executor/platform/port.h"
 #include "dlxnet/stream_executor/platform/thread_annotations.h"
+
 
 
 
@@ -64,6 +68,14 @@ namespace stream_executor{
             // Initializes timer t via the StreamExecutor.
             Stream &InitTimer(Timer *t);
 
+            // (Synchronously) block the host code waiting for the operations
+            // entrained on the stream (enqueued to this point in program
+            // execution) to complete.
+            //
+            // Returns an OK status if the blocking was successful and the stream is ok().
+            // Otherwise returns an error describing why the blocking failed.
+            port::Status BlockHostUntilDone() LOCKS_EXCLUDED(mu_);
+
             // Entrains onto the stream of operations: a kernel launch with the given
             // (variadic) parameters for the invocation. These arguments can be things
             // like DeviceMemory or primitive types such as int. What arguments you may
@@ -105,6 +117,16 @@ namespace stream_executor{
                 return parent_;
             }
         private:
+            // Sets the error state if operation_retcode is false.
+            // This is a useful shorthand for many stream routines.
+            void CheckError(bool operation_retcode) LOCKS_EXCLUDED(mu_) {
+                if (operation_retcode) {
+                    return;
+                }
+                absl::MutexLock lock(&mu_);
+                ok_ = false;
+            }
+
             bool InErrorState() const LOCKS_EXCLUDED(mu_) {
                 absl::ReaderMutexLock lock(&mu_);
                 return !ok_;
