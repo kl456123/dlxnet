@@ -113,6 +113,6 @@ void opencl_main(){
 
 
 int main(){
-    void opencl_main();
+    opencl_main();
     return 0;
 }

@@ -8,6 +8,8 @@
 #include "dlxnet/stream_executor/lib/initialize.h"
 #include "dlxnet/stream_executor/lib/status.h"
 
+#include "dlxnet/stream_executor/opencl/ocl_driver.h"
+#include "dlxnet/stream_executor/opencl/ocl_gpu_executor.h"
 
 namespace stream_executor{
 
@@ -19,14 +21,21 @@ namespace stream_executor{
     }// namespace
 
     OCLPlatform::OCLPlatform()
-        : name_("OpenCL"){}
+        : name_("OpenCL"){
+            // init driver
+            // just call it once
+            OCLDriver::Init();
+        }
 
     OCLPlatform::~OCLPlatform() {}
 
     Platform::Id OCLPlatform::id() const { return kOCLPlatformId; }
 
     int OCLPlatform::VisibleDeviceCount() const {
-        return 0;
+        if(!OCLDriver::Initialized()){
+            return -1;
+        }
+        return OCLDriver::GetDeviceCount();
     }
 
     const string& OCLPlatform::Name() const { return name_; }
@@ -56,16 +65,14 @@ namespace stream_executor{
 
     port::StatusOr<std::unique_ptr<DeviceDescription>>
         OCLPlatform::DescriptionForDevice(int ordinal) const {
-            return std::unique_ptr<DeviceDescription>();
-            // return GpuExecutor::CreateDeviceDescription(ordinal);
+            return OCLExecutor::CreateDeviceDescription(ordinal);
         }
 
     port::StatusOr<std::unique_ptr<StreamExecutor>>
         OCLPlatform::GetUncachedExecutor(const StreamExecutorConfig& config) {
-            // auto executor = absl::make_unique<StreamExecutor>(
-            // this, absl::make_unique<GpuExecutor>(config.plugin_config),
-            // config.ordinal);
-            auto executor= std::unique_ptr<StreamExecutor>();
+            auto executor = absl::make_unique<StreamExecutor>(
+                    this, absl::make_unique<OCLExecutor>(config.plugin_config),
+                    config.ordinal);
             auto init_status = executor->Init(config.device_options);
             if (!init_status.ok()) {
                 return port::Status(

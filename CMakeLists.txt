@@ -18,7 +18,7 @@ option(BUILD_TEST "BUILD TEST" ON)
 option(BUILD_DEMO "BUILD DEMO" ON)
 option(BUILD_CUDA "BUILD CUDA" OFF)
 option(BUILD_OPENGL "BUILD OPENGL" OFF)
-option(BUILD_OPENCL "BUILD OPENCL" OFF)
+option(BUILD_OPENCL "BUILD OPENCL" ON)
 
 find_package(Protobuf REQUIRED)
 find_package(Eigen3 REQUIRED NO_MODULE)
@@ -90,6 +90,11 @@ if (BUILD_CUDA)
     # set(CUDA_HOST_COMPILER clang++)
 
     add_definitions(-DGOOGLE_CUDA)
+endif()
+
+if (BUILD_OPENCL)
+    find_package(OpenCL REQUIRED)
+    set(DLXNET_DEPEND -lOpenCL ${DLXNET_DEPEND})
 endif()
 
 
