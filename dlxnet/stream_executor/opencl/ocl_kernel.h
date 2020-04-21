@@ -34,7 +34,7 @@ namespace stream_executor{
     class OCLKernel : public internal::KernelInterface {
         public:
             OCLKernel()
-                : gpu_function_(nullptr),
+                : gpu_function_(),
                 arity_(0),
                 preferred_cache_config_(KernelCacheConfig::kNoPreference) {}
 

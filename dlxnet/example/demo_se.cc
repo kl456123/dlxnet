@@ -22,7 +22,7 @@ void opencl_main(){
     }
     )";
 
-    static constexpr const char *FILE_NAME="../dlxnet/example/cl/vec_add.ocl";
+    static constexpr const char *FILE_NAME="../dlxnet/example/cl/mystery_add.ocl";
 
     // The number of arguments expected by the kernel described in
     // KERNEL_PTX_TEMPLATE.
@@ -31,7 +31,7 @@ void opencl_main(){
     static constexpr const char* platform_name = "OpenCL";
 
     // The name of the kernel described in KERNEL_PTX.
-    static constexpr const char *KERNEL_NAME = "vector_add";
+    static constexpr const char *KERNEL_NAME = "mystery_add";
 
     // The value added to the input in the kernel described in KERNEL_PTX.
     static constexpr float MYSTERY_VALUE = 123.0f;

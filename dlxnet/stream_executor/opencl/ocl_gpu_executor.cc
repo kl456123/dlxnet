@@ -213,9 +213,7 @@ namespace stream_executor{
             KernelArg kernel_arg = iterator.next();
             CHECK(kernel_arg.address);
             CHECK(!kernel_arg.is_shared);
-            cl::Buffer* buffer = reinterpret_cast<cl::Buffer*>(
-                    const_cast<void*>(kernel_arg.address));
-            ocl_func.setArg(arg_index, *buffer);
+            ocl_func.setArg(arg_index, kernel_arg.size, kernel_arg.address);
             ++arg_index;
         }
 

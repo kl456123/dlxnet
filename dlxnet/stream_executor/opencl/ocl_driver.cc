@@ -46,7 +46,7 @@ namespace stream_executor{
         if(all_platforms.size()>1){
             // just log warnning instead of return error
             LOG(WARNING)<<"Multiple platforms found, "
-                "there may be"<<all_platforms.size()<<"opencl implementaions";
+                "there may be "<<all_platforms.size()<<" opencl implementaions";
         }
         platform_ = all_platforms[0];
         if(default_platform!=nullptr){
