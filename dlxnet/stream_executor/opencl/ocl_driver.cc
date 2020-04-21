@@ -42,8 +42,9 @@ namespace stream_executor{
         }
 
         if(all_platforms.size()>1){
-            return ::dlxnet::errors::Internal("Multiple platforms found, "
-                    "there may be",all_platforms.size(),"opencl implementaions");
+            // just log warnning instead of return error
+            LOG(WARNING)<<"Multiple platforms found, "
+                    "there may be"<<all_platforms.size()<<"opencl implementaions";
         }
         platform_ = all_platforms[0];
         if(default_platform!=nullptr){
@@ -71,7 +72,7 @@ namespace stream_executor{
     }
 
     Status OCLDriver::CreateContext(cl::Device device, cl::Context* context){
-        context = new cl::Context({device});
+        *context = cl::Context({device});
         return Status::OK();
     }
 
@@ -82,7 +83,7 @@ namespace stream_executor{
 
     Status OCLDriver::CreateCommandQueue(cl::Context context,
             cl::Device device, cl::CommandQueue* command_queue){
-        command_queue = new cl::CommandQueue(context, device);
+        *command_queue = cl::CommandQueue(context, device);
         return Status::OK();
     }
 

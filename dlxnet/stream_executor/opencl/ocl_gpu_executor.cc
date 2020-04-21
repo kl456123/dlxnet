@@ -42,6 +42,7 @@ namespace stream_executor{
     // memory manager
     DeviceMemoryBase OCLExecutor::Allocate(uint64 size, int64 memory_space){
         CHECK_EQ(memory_space, 0);
+        CHECK(context_());
         return DeviceMemoryBase(OCLDriver::DeviceAllocate(context_, size), size);
     }
 
@@ -78,6 +79,7 @@ namespace stream_executor{
 
     // stream
     bool OCLExecutor::AllocateStream(Stream* stream){
+        return false;
     }
 
     void OCLExecutor::DeallocateStream(Stream* stream){
