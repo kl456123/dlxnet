@@ -1,4 +1,6 @@
 #include <vector>
+#include <fstream>
+#include <string>
 
 #include "dlxnet/stream_executor/platform/port.h"
 #include "dlxnet/stream_executor/opencl/ocl_driver.h"
@@ -44,7 +46,7 @@ namespace stream_executor{
         if(all_platforms.size()>1){
             // just log warnning instead of return error
             LOG(WARNING)<<"Multiple platforms found, "
-                    "there may be"<<all_platforms.size()<<"opencl implementaions";
+                "there may be"<<all_platforms.size()<<"opencl implementaions";
         }
         platform_ = all_platforms[0];
         if(default_platform!=nullptr){
@@ -81,10 +83,11 @@ namespace stream_executor{
         return CreateContext(devices_[device_ordinal], context);
     }
 
-    Status OCLDriver::CreateCommandQueue(cl::Context context,
-            cl::Device device, cl::CommandQueue* command_queue){
+    bool OCLDriver::CreateStream(cl::Context context,
+            cl::CommandQueue* command_queue){
+        cl::Device device = context.getInfo<CL_CONTEXT_DEVICES>()[0];
         *command_queue = cl::CommandQueue(context, device);
-        return Status::OK();
+        return true;
     }
 
     Status OCLDriver::CreateDeviceDescription(int device_ordinal){
@@ -109,5 +112,68 @@ namespace stream_executor{
         VLOG(2) << "allocated " << ptr << " for context " << &context
             << " of " << bytes << " bytes";
         return ptr;
+    }
+
+    bool OCLDriver::GetProgramKernel(cl::Context context, cl::Program program,
+            const char* kernelname, cl::Kernel* kernel){
+        // make sure context is activated now
+
+        // check args
+        CHECK(program() != nullptr && kernelname != nullptr);
+
+        // check error
+        *kernel = cl::Kernel(program, kernelname);
+        return true;
+    }
+
+    Status OCLDriver::LoadText(cl::Context context, absl::string_view fname,
+            GpuModuleHandle* module, const std::string build_options){
+        std::ifstream sourceFile(std::string(fname.data(), fname.size()));
+        if(sourceFile.fail()){
+            return ::dlxnet::errors::NotFound(fname, " Cannot be found");
+        }
+        std::string sourceCode(
+                std::istreambuf_iterator<char>(sourceFile),
+                (std::istreambuf_iterator<char>()));
+        cl::Program::Sources source(1, std::make_pair(sourceCode.c_str(),
+                    sourceCode.length()+1));
+
+        // Make program of the source code in the context
+        cl::Program program = cl::Program(context, source);
+
+        VECTOR_CLASS<cl::Device> devices = context.getInfo<CL_CONTEXT_DEVICES>();
+
+        // Build program for these specific devices
+        try{
+            program.build(devices, build_options.c_str());
+        } catch(cl::Error error) {
+            if(error.err() == CL_BUILD_PROGRAM_FAILURE) {
+                return ::dlxnet::errors::Internal("Build error log: ",
+                        program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]));
+            }
+            return ::dlxnet::errors::Internal("Error happened in Build Program!");
+        }
+
+        *module = program;
+        return Status::OK();
+    }
+
+    Status OCLDriver::LoadBin(cl::Context, absl::string_view fname,
+            GpuModuleHandle* module){
+        return Status::OK();
+    }
+
+    Status OCLDriver::InitEvent(cl::Context context, cl::Event* result){
+        cl::Event event;
+        *result = event;
+        return Status::OK();
+    }
+
+    Status OCLDriver::LaunchKernel(GpuContext context,
+            GpuFunctionHandle kernel, cl::NDRange gws, cl::NDRange lws,
+            GpuStreamHandle stream){
+        // enqueue
+        stream.enqueueNDRangeKernel(kernel, cl::NullRange,
+                gws, lws);
     }
 }//namespace stream_executor

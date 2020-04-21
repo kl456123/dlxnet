@@ -37,8 +37,22 @@ namespace stream_executor{
             static Status CreateContext(int device_ordinal, cl::Context* context);
 
             // refers to stream in cuda context, used to run all command operations
-            static Status CreateCommandQueue(cl::Context context,
-                    cl::Device device, cl::CommandQueue* command_queue);
+            static bool CreateStream(cl::Context context,
+                    cl::CommandQueue* command_queue);
+
+            static Status InitEvent(cl::Context context, cl::Event* result);
+
+            static bool GetProgramKernel(cl::Context context, cl::Program program,
+                    const char* kernelname, cl::Kernel* kernel);
+            static Status LoadText(cl::Context, absl::string_view fname,
+                    GpuModuleHandle* module, const std::string build_options="");
+
+            static Status LoadBin(cl::Context, absl::string_view fname,
+                    GpuModuleHandle* module);
+
+            static Status LaunchKernel(GpuContext context,
+                    GpuFunctionHandle kernel, cl::NDRange gws, cl::NDRange lws,
+                    GpuStreamHandle stream);
 
             static int GetDeviceCount(){
                 return devices_.size();

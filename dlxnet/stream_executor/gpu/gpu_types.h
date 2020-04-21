@@ -9,7 +9,8 @@ namespace stream_executor{
     using GpuContext = cl::Context;
     using GpuStreamHandle = cl::CommandQueue;
     using GpuFunctionHandle = cl::Kernel;
-    using GpuMoudleHandle = cl::Program;
+    using GpuModuleHandle = cl::Program;
+    using GpuEventHandle = cl::Event;
 }
 
 

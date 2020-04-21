@@ -6,7 +6,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "dlxnet/stream_executor/event.h"
-// #include "dlxnet/stream_executor/gpu/gpu_kernel.h"
 #include "dlxnet/stream_executor/lib/status.h"
 #include "dlxnet/stream_executor/lib/statusor.h"
 #include "dlxnet/stream_executor/platform.h"
@@ -15,6 +14,8 @@
 #include "dlxnet/stream_executor/stream_executor_internal.h"
 #include "dlxnet/stream_executor/gpu/gpu_types.h"
 #include "dlxnet/stream_executor/opencl/ocl_driver.h"
+#include "dlxnet/stream_executor/opencl/ocl_kernel.h"
+#include "dlxnet/stream_executor/kernel.h"
 
 namespace stream_executor{
     class OCLExecutor: public internal::StreamExecutorInterface{
@@ -32,12 +33,14 @@ namespace stream_executor{
             port::Status Init(int device_ordinal, DeviceOptions device_options) override;
 
             port::Status GetKernel(const MultiKernelLoaderSpec &spec,
-                    KernelBase *kernel) override {
-            }
+                    KernelBase *kernel) override;
             port::Status Launch(Stream *stream, const ThreadDim &thread_dims,
                     const BlockDim &block_dims, const KernelBase &kernel,
-                    const KernelArgsArrayBase &args) override {
-            }
+                    const KernelArgsArrayBase &args) override ;
+
+            // Collects metadata for the specified kernel.
+            port::Status GetKernelMetadata(OCLKernel* cuda_kernel,
+                    KernelMetadata* kernel_metadata);
 
             DeviceMemoryBase Allocate(uint64 size, int64 memory_space) override;
 
@@ -102,8 +105,26 @@ namespace stream_executor{
 
             std::unique_ptr<internal::TimerInterface> GetTimerImplementation() override;
 
-            GpuContext* gpu_context();
+            GpuContext gpu_context()const{
+                return context_;
+            }
+
+            // (supported on OpenCL only)
+            port::Status LoadProgramFromText(absl::string_view fname, GpuModuleHandle* module)
+                EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
+
+            // (supported on OpenCL only)
+            port::Status LoadProgramFromBin(absl::string_view fname, GpuModuleHandle* module)
+                EXCLUSIVE_LOCKS_REQUIRED(in_memory_modules_mu_);
+
         private:
+
+            // Guards the in-memory-module mapping.
+            absl::Mutex in_memory_modules_mu_;
+
+            std::map<const char*, GpuModuleHandle> in_memory_modules_
+                GUARDED_BY(in_memory_modules_mu_);
+
             // The device ordinal value that this executor was initialized with; recorded
             // for use in getting device metadata. Immutable post-initialization.
             int device_ordinal_;

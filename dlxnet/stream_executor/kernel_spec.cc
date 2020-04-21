@@ -25,4 +25,37 @@ namespace stream_executor {
         : KernelLoaderSpec(kernelname), filename_(string(filename)) {}
 
     MultiKernelLoaderSpec::MultiKernelLoaderSpec(size_t arity) : arity_(arity) {}
+
+    OpenCLTextOnDisk::OpenCLTextOnDisk(absl::string_view filename,
+            absl::string_view kernelname)
+        : OnDiskKernelLoaderSpec(filename, kernelname) {}
+
+    OpenCLTextInMemory::OpenCLTextInMemory(absl::string_view text,
+            absl::string_view kernelname)
+        : KernelLoaderSpec(kernelname), text_(text) {}
+
+    OpenCLBinaryOnDisk::OpenCLBinaryOnDisk(absl::string_view filename,
+            absl::string_view kernelname)
+        : OnDiskKernelLoaderSpec(filename, kernelname) {}
+
+    MultiKernelLoaderSpec *MultiKernelLoaderSpec::AddOpenCLTextOnDisk(
+            absl::string_view filename, absl::string_view kernelname) {
+        CHECK(ocl_text_on_disk_ == nullptr);
+        ocl_text_on_disk_.reset(new OpenCLTextOnDisk{filename, kernelname});
+        return this;
+    }
+
+    MultiKernelLoaderSpec *MultiKernelLoaderSpec::AddOpenCLBinaryOnDisk(
+            absl::string_view filename, absl::string_view kernelname) {
+        CHECK(ocl_binary_on_disk_ == nullptr);
+        ocl_binary_on_disk_.reset(new OpenCLBinaryOnDisk{filename, kernelname});
+        return this;
+    }
+
+    MultiKernelLoaderSpec *MultiKernelLoaderSpec::AddOpenCLTextInMemory(
+            absl::string_view filename, absl::string_view kernelname) {
+        CHECK(ocl_text_in_memory_ == nullptr);
+        ocl_text_in_memory_.reset(new OpenCLTextInMemory{filename, kernelname});
+        return this;
+    }
 }//namespace stream_executor

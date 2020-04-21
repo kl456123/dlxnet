@@ -22,6 +22,8 @@ void opencl_main(){
     }
     )";
 
+    static constexpr const char *FILE_NAME="../dlxnet/example/cl/vec_add.ocl";
+
     // The number of arguments expected by the kernel described in
     // KERNEL_PTX_TEMPLATE.
     static constexpr int KERNEL_ARITY = 2;
@@ -29,7 +31,7 @@ void opencl_main(){
     static constexpr const char* platform_name = "OpenCL";
 
     // The name of the kernel described in KERNEL_PTX.
-    static constexpr const char *KERNEL_NAME = "add_mystery_value";
+    static constexpr const char *KERNEL_NAME = "vector_add";
 
     // The value added to the input in the kernel described in KERNEL_PTX.
     static constexpr float MYSTERY_VALUE = 123.0f;
@@ -52,6 +54,7 @@ void opencl_main(){
     // of the kernel defined in the PTX string.
     se::MultiKernelLoaderSpec kernel_loader_spec(KERNEL_ARITY);
     // kernel_loader_spec.AddCudaPtxInMemory(KERNEL_PTX, KERNEL_NAME);
+    kernel_loader_spec.AddOpenCLTextOnDisk(FILE_NAME, KERNEL_NAME);
 
     // Next create a kernel handle, which we will associate with our kernel code
     // (i.e., the PTX string).  The type of this handle is a bit verbose, so we
@@ -84,7 +87,10 @@ void opencl_main(){
     //
     // After this call the kernel object can be used to launch its kernel on its
     // device.
-    executor->GetKernel(kernel_loader_spec, &kernel);
+    auto status = executor->GetKernel(kernel_loader_spec, &kernel);
+    if(!status.ok()){
+        LOG(FATAL)<<status;
+    }
 
     // Allocate memory in the device memory space to hold the result of the kernel
     // call. This memory will be freed when this object goes out of scope.

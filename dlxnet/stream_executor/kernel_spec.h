@@ -109,6 +109,46 @@ namespace stream_executor {
             SE_DISALLOW_COPY_AND_ASSIGN(OnDiskKernelLoaderSpec);
     };
 
+    // Kernel loader specification for OpenCL text that resides on disk.
+    class OpenCLTextOnDisk : public OnDiskKernelLoaderSpec {
+        public:
+            OpenCLTextOnDisk(absl::string_view filename, absl::string_view kernelname);
+            ~OpenCLTextOnDisk() override {}
+
+            const char *CanonicalSuffix() const override { return ".ocl"; }
+
+        private:
+            SE_DISALLOW_COPY_AND_ASSIGN(OpenCLTextOnDisk);
+    };
+
+    // Kernel loader specification for OpenCL binary that resides on disk.
+    class OpenCLBinaryOnDisk : public OnDiskKernelLoaderSpec {
+        public:
+            OpenCLBinaryOnDisk(absl::string_view filename, absl::string_view kernelname);
+            ~OpenCLBinaryOnDisk() override {}
+
+            const char *CanonicalSuffix() const override { return ".aocx"; }
+
+        private:
+            SE_DISALLOW_COPY_AND_ASSIGN(OpenCLBinaryOnDisk);
+    };
+
+    // Kernel loader specification for OpenCL text that resides in memory.
+    class OpenCLTextInMemory : public KernelLoaderSpec {
+        public:
+            OpenCLTextInMemory(absl::string_view text, absl::string_view kernelname);
+            ~OpenCLTextInMemory() override {}
+
+            // Returns the OpenCL text contents.
+            const string &text() const { return text_; }
+
+        private:
+            // OpenCL translation unit text contents in memory.
+            string text_;
+
+            SE_DISALLOW_COPY_AND_ASSIGN(OpenCLTextInMemory);
+    };
+
     // Describes how to load a kernel on any subset of a number of target platforms.
     class MultiKernelLoaderSpec {
         public:
@@ -116,7 +156,52 @@ namespace stream_executor {
 
             // Returns the number of arguments that this kernel accepts.
             size_t arity() const { return arity_; }
+
+            // Convenience getters for testing whether these platform variants have
+            // kernel loader specifications available.
+            bool has_ocl_text_on_disk() const { return ocl_text_on_disk_ != nullptr; }
+            bool has_ocl_binary_on_disk() const { return ocl_binary_on_disk_ != nullptr; }
+            bool has_ocl_text_in_memory() const { return ocl_text_in_memory_ != nullptr; }
+
+            // Accessors for platform variant kernel load specifications.
+            // Precondition: corresponding has_* is true.
+            const OpenCLTextOnDisk &ocl_text_on_disk() const {
+                CHECK(has_ocl_text_on_disk());
+                return *ocl_text_on_disk_;
+            }
+            const OpenCLBinaryOnDisk &ocl_binary_on_disk() const {
+                CHECK(has_ocl_binary_on_disk());
+                return *ocl_binary_on_disk_;
+            }
+            const OpenCLTextInMemory &ocl_text_in_memory() const {
+                CHECK(has_ocl_text_in_memory());
+                return *ocl_text_in_memory_;
+            }
+
+
+            // Builder-pattern-like methods for use in initializing a
+            // MultiKernelLoaderSpec. Each of these should be used at most once for a
+            // single MultiKernelLoaderSpec object. See file comment for example usage.
+            //
+            // Note that the kernelname parameter must be consistent with the kernel in
+            // the PTX or OpenCL being loaded. Also be aware that in CUDA C++ the kernel
+            // name may be mangled by the compiler if it is not declared in an
+            // extern "C" scope.
+            MultiKernelLoaderSpec *AddOpenCLTextOnDisk(absl::string_view filename,
+                    absl::string_view kernelname);
+            MultiKernelLoaderSpec *AddOpenCLBinaryOnDisk(absl::string_view filename,
+                    absl::string_view kernelname);
+            MultiKernelLoaderSpec *AddOpenCLTextInMemory(absl::string_view ocl_text,
+                    absl::string_view kernelname);
+
         private:
+            std::unique_ptr<OpenCLTextOnDisk>
+                ocl_text_on_disk_;  // OpenCL text that resides on disk.
+            std::unique_ptr<OpenCLBinaryOnDisk>
+                ocl_binary_on_disk_;  // OpenCL binary that resides on disk.
+            std::unique_ptr<OpenCLTextInMemory>
+                ocl_text_in_memory_;  // OpenCL text that resides in memory.
+
             // Number of parameters that the kernel takes. (This is nicer to have in a
             // constexpr than having to determine it from the types via template
             // metaprogramming).
