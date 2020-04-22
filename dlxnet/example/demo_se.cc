@@ -56,7 +56,8 @@ void opencl_main(){
     //
     // A type like this is nice to have because it enables static type checking of
     // kernel arguments when we enqueue work on a stream.
-    using KernelType = se::TypedKernel<se::DeviceMemory<float> *, se::DeviceMemory<float> *, se::DeviceMemory<float> *>;
+    using KernelType = se::TypedKernel<se::DeviceMemory<float>*,
+          se::DeviceMemory<float> *, se::DeviceMemory<float> *>;
 
     // Now instantiate an object of the specific kernel type we declared above.
     // The kernel object is not yet connected with the device code that we want it

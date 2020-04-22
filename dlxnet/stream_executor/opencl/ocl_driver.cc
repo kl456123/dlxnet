@@ -110,11 +110,14 @@ namespace stream_executor{
         if(bytes==0){
             return nullptr;
         }
-        cl::Buffer* buffer = new cl::Buffer(context, CL_MEM_READ_WRITE, bytes);
-        void* ptr  = (*buffer)();
+        void* ptr = clCreateBuffer(context(), CL_MEM_READ_WRITE, bytes, NULL, NULL);
         VLOG(2) << "allocated " << ptr << " for context " << &context
             << " of " << bytes << " bytes";
         return ptr;
+    }
+
+    void OCLDriver::DeviceDeallocate(GpuContext context, GpuDevicePtr gpu_ptr){
+        clReleaseMemObject(gpu_ptr);
     }
 
     bool OCLDriver::GetProgramKernel(cl::Context context, cl::Program program,

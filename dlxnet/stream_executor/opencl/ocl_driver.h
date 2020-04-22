@@ -30,6 +30,7 @@ namespace stream_executor{
             static Status CreateDeviceDescription(int device_ordinal);
 
             static void* DeviceAllocate(GpuContext context, uint64 bytes);
+            static void DeviceDeallocate(GpuContext context, GpuDevicePtr gpu_ptr);
 
             // refers to stream executor, used to manager all objects in opencl context
             static Status CreateContext(cl::Device device, cl::Context* context);

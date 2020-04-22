@@ -115,6 +115,7 @@ namespace stream_executor{
     }
 
     void OCLExecutor::Deallocate(DeviceMemoryBase *mem){
+        OCLDriver::DeviceDeallocate(context_, AsOCLDevicePtr(mem));
     }
 
     // implementation
