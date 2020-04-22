@@ -64,6 +64,21 @@ namespace stream_executor{
             static port::StatusOr<std::unique_ptr<DeviceDescription>>
                 CreateDeviceDescription(int device_ordinal);
 
+            // Given const GPU memory, returns a libcuda device pointer datatype, suitable
+            // for passing directly to libcuda APIs.
+            //
+            // N.B. we must lose constness in order to pass a suitable type to the existing
+            // libcuda APIs, so the caller should take care to only pass the result of const
+            // GPU memory conversions to libcuda functions which will honor constness.
+            static GpuDevicePtr AsOCLDevicePtr(const DeviceMemoryBase &gpu_mem) {
+                return reinterpret_cast<GpuDevicePtr>(const_cast<void*>(gpu_mem.opaque()));
+            }
+
+            // See description on const version above.
+            static GpuDevicePtr AsOCLDevicePtr(DeviceMemoryBase *gpu_mem) {
+                return AsOCLDevicePtr(*gpu_mem);
+            }
+
             // some other implementation managed by stream executor,
             // like stream, timer and event
             // (TODO use Stream or StreamInterface in argument list)

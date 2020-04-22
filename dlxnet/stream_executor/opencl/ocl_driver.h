@@ -54,6 +54,15 @@ namespace stream_executor{
                     GpuFunctionHandle kernel, cl::NDRange gws, cl::NDRange lws,
                     GpuStreamHandle stream);
 
+            static port::Status SynchronousMemcpyD2H(GpuContext context, void* host_dst,
+                    GpuDevicePtr gpu_src, uint64 size);
+            static port::Status SynchronousMemcpyH2D(GpuContext context,
+                    GpuDevicePtr gpu_dst,
+                    const void* host_src, uint64 size);
+            static port::Status SynchronousMemcpyD2D(GpuContext context,
+                    GpuDevicePtr gpu_dst,
+                    GpuDevicePtr gpu_src, uint64 size);
+
             static int GetDeviceCount(){
                 return devices_.size();
             }
@@ -63,6 +72,10 @@ namespace stream_executor{
             static bool Initialized(){
                 return initialized_;
             }
+
+            static Status GetDefaultStream(GpuContext context, GpuStreamHandle* stream);
+        private:
+            static GpuStreamHandle default_stream_;
     };
 }//namespace stream_executor
 

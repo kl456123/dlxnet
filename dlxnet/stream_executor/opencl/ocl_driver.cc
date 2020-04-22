@@ -1,6 +1,7 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <cstring>
 
 #include "dlxnet/stream_executor/platform/port.h"
 #include "dlxnet/stream_executor/opencl/ocl_driver.h"
@@ -9,6 +10,8 @@
 #include "dlxnet/core/lib/core/errors.h"
 
 namespace stream_executor{
+    GpuStreamHandle OCLDriver::default_stream_;
+
     Status OCLDriver::Init(){
         // To init platform is ok
         SE_RETURN_IF_ERROR(GetOrCreatePlatform());
@@ -108,7 +111,7 @@ namespace stream_executor{
             return nullptr;
         }
         cl::Buffer* buffer = new cl::Buffer(context, CL_MEM_READ_WRITE, bytes);
-        void* ptr  = reinterpret_cast<void*>(buffer);
+        void* ptr  = (*buffer)();
         VLOG(2) << "allocated " << ptr << " for context " << &context
             << " of " << bytes << " bytes";
         return ptr;
@@ -175,5 +178,52 @@ namespace stream_executor{
         // enqueue
         stream.enqueueNDRangeKernel(kernel, cl::NullRange,
                 gws, lws);
+        return Status::OK();
+    }
+
+    Status OCLDriver::GetDefaultStream(GpuContext context, GpuStreamHandle* stream){
+        if(default_stream_()==nullptr){
+            CreateStream(context, &default_stream_);
+        }
+
+        *stream = default_stream_;
+        return Status::OK();
+    }
+
+    Status OCLDriver::SynchronousMemcpyD2H(GpuContext context, void* host_dst,
+            GpuDevicePtr gpu_src_ptr, uint64 size){
+        // make sure context is activated
+        GpuStreamHandle stream;
+        GetDefaultStream(context, &stream);
+        cl::Buffer gpu_src = cl::Buffer(gpu_src_ptr);
+        try{
+            auto buffer_ptr = stream.enqueueMapBuffer(gpu_src, CL_TRUE, CL_MAP_READ, 0, size);
+            memcpy(host_dst, buffer_ptr, size);
+            stream.enqueueUnmapMemObject(gpu_src, buffer_ptr);
+        }catch(cl::Error error) {
+            return ::dlxnet::errors::Internal(error.what(), "(", error.err(), ")");
+        }
+        return Status::OK();
+    }
+
+    Status OCLDriver::SynchronousMemcpyH2D(GpuContext context,
+            GpuDevicePtr gpu_dst_ptr, const void* host_src, uint64 size){
+        // make sure context is activated
+        GpuStreamHandle stream;
+        SE_RETURN_IF_ERROR(GetDefaultStream(context, &stream));
+        cl::Buffer gpu_dst = cl::Buffer(gpu_dst_ptr);
+        auto buffer_ptr = stream.enqueueMapBuffer(gpu_dst, CL_TRUE, CL_MAP_WRITE, 0, size);
+        memcpy(buffer_ptr, host_src, size);
+        stream.enqueueUnmapMemObject(gpu_dst, buffer_ptr);
+        return Status::OK();
+    }
+
+    Status OCLDriver::SynchronousMemcpyD2D(GpuContext context,
+            GpuDevicePtr gpu_dst_ptr, GpuDevicePtr gpu_src_ptr, uint64 size){
+        // make sure context is activated
+        GpuStreamHandle stream;
+        SE_RETURN_IF_ERROR(GetDefaultStream(context, &stream));
+        stream.enqueueCopyBuffer(cl::Buffer(gpu_src_ptr), cl::Buffer(gpu_dst_ptr), 0, 0, size);
+        return Status::OK();
     }
 }//namespace stream_executor

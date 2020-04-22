@@ -11,6 +11,7 @@ namespace stream_executor{
     using GpuFunctionHandle = cl::Kernel;
     using GpuModuleHandle = cl::Program;
     using GpuEventHandle = cl::Event;
+    using GpuDevicePtr = cl_mem;
 }
 
 

@@ -1,6 +1,7 @@
 #include "dlxnet/stream_executor/opencl/ocl_gpu_executor.h"
 #include "dlxnet/stream_executor/opencl/ocl_driver.h"
 #include "dlxnet/stream_executor/opencl/ocl_stream.h"
+#include "dlxnet/core/lib/core/errors.h"
 
 namespace stream_executor{
 
@@ -177,20 +178,22 @@ namespace stream_executor{
     // copy functions
     port::Status OCLExecutor::SynchronousMemcpy(DeviceMemoryBase* gpu_dst,
             const void* host_src, uint64 size){
-        return port::Status::OK();
+        return OCLDriver::SynchronousMemcpyH2D(context_, AsOCLDevicePtr(gpu_dst),
+                host_src, size);
     }
 
     port::Status OCLExecutor::SynchronousMemcpy(void* host_dst,
-            const DeviceMemoryBase& gpu_src,
-            uint64 size){
-        return port::Status::OK();
+            const DeviceMemoryBase& gpu_src, uint64 size){
+        return OCLDriver::SynchronousMemcpyD2H(context_, host_dst,
+                AsOCLDevicePtr(gpu_src), size);
 
     }
 
     port::Status OCLExecutor::SynchronousMemcpyDeviceToDevice(DeviceMemoryBase* gpu_dst,
             const DeviceMemoryBase& gpu_src,
             uint64 size){
-        return port::Status::OK();
+        return OCLDriver::SynchronousMemcpyD2D(context_, AsOCLDevicePtr(gpu_dst),
+                AsOCLDevicePtr(gpu_src), size);
     }
 
     port::Status OCLExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
@@ -213,7 +216,12 @@ namespace stream_executor{
             KernelArg kernel_arg = iterator.next();
             CHECK(kernel_arg.address);
             CHECK(!kernel_arg.is_shared);
-            ocl_func.setArg(arg_index, kernel_arg.size, kernel_arg.address);
+            try{
+                ocl_func.setArg(arg_index, kernel_arg.size, kernel_arg.address);
+            }catch(cl::Error error){
+                return ::dlxnet::errors::Internal("arg_index: ",arg_index," ",
+                        error.what(), "(", error.err(), ")");
+            }
             ++arg_index;
         }
 
