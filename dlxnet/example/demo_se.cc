@@ -4,37 +4,28 @@
 namespace se = stream_executor;
 
 void opencl_main(){
-    static constexpr const char *KERNEL_PTX = R"(
-    .version 3.1
-    .target sm_20
-    .address_size 64
-    .visible .entry add_mystery_value(
-        .param .f32 float_literal,
-        .param .u64 result_loc
-        ) {
-      .reg .u64 %rl<2>;
-      .reg .f32 %f<2>;
-      ld.param.f32 %f1, [float_literal];
-      ld.param.u64 %rl1, [result_loc];
-      add.f32 %f1, %f1, 123.0;
-      st.f32 [%rl1], %f1;
-      ret;
-    }
-    )";
-
-    static constexpr const char *FILE_NAME="../dlxnet/example/cl/mystery_add.ocl";
+    static constexpr const char *FILE_NAME="../dlxnet/example/cl/vec_add.ocl";
 
     // The number of arguments expected by the kernel described in
     // KERNEL_PTX_TEMPLATE.
-    static constexpr int KERNEL_ARITY = 2;
+    static constexpr int KERNEL_ARITY = 3;
+
+    static constexpr int N = 100;
+    static constexpr int bytes = N*sizeof(float);
+
+    float* A = new float[N];
+    float* B = new float[N];
+    float* C = new float[N];
+    // mock data
+    for(int i=0;i<N;i++){
+        A[i] = 1.0;
+        B[i] = 2.0;
+    }
 
     static constexpr const char* platform_name = "OpenCL";
 
     // The name of the kernel described in KERNEL_PTX.
-    static constexpr const char *KERNEL_NAME = "mystery_add";
-
-    // The value added to the input in the kernel described in KERNEL_PTX.
-    static constexpr float MYSTERY_VALUE = 123.0f;
+    static constexpr const char *KERNEL_NAME = "vector_add";
 
     // Get a CUDA Platform object. (Other platforms such as OpenCL are also
     // supported.)
@@ -65,7 +56,7 @@ void opencl_main(){
     //
     // A type like this is nice to have because it enables static type checking of
     // kernel arguments when we enqueue work on a stream.
-    using KernelType = se::TypedKernel<float, se::DeviceMemory<float> *>;
+    using KernelType = se::TypedKernel<se::DeviceMemory<float> *, se::DeviceMemory<float> *, se::DeviceMemory<float> *>;
 
     // Now instantiate an object of the specific kernel type we declared above.
     // The kernel object is not yet connected with the device code that we want it
@@ -94,7 +85,14 @@ void opencl_main(){
 
     // Allocate memory in the device memory space to hold the result of the kernel
     // call. This memory will be freed when this object goes out of scope.
-    se::ScopedDeviceMemory<float> result = executor->AllocateOwnedScalar<float>();
+    se::ScopedDeviceMemory<float> input0 = executor->AllocateOwnedArray<float>(N);
+    // se::ScopedDeviceMemory<float> input1 = executor->AllocateOwnedArray<float>(N);
+    // se::ScopedDeviceMemory<float> output = executor->AllocateOwnedArray<float>(N);
+
+    // upload data
+    executor->SynchronousMemcpyH2D(A, bytes, input0.ptr());
+    executor->SynchronousMemcpyD2H(input0.cref(), bytes, C);
+    // executor->SynchronousMemcpyH2D(B, bytes, input1.ptr());
 
     // Create a stream on which to schedule device operations.
     se::Stream stream(executor);
@@ -102,19 +100,20 @@ void opencl_main(){
     // Schedule a kernel launch on the new stream and block until the kernel
     // completes. The kernel call executes asynchronously on the device, so we
     // could do more work on the host before calling BlockHostUntilDone.
-    const float kernel_input_argument = 42.5f;
-    stream.Init()
-        .ThenLaunch(se::ThreadDim(), se::BlockDim(), kernel,
-                kernel_input_argument, result.ptr())
-        .BlockHostUntilDone();
+    // const float kernel_input_argument = 42.5f;
+    // stream.Init()
+    // .ThenLaunch(se::ThreadDim(), se::BlockDim(N), kernel,
+    // input0.ptr(), input1.ptr(), output.ptr())
+    // .BlockHostUntilDone();
 
     // Copy the result of the kernel call from device back to the host.
-    float host_result = 0.0f;
-    executor->SynchronousMemcpyD2H(result.cref(), sizeof(host_result),
-            &host_result);
+    // executor->SynchronousMemcpyD2H(output.cref(), bytes, C);
 
     // Verify that the correct result was computed.
-    assert((kernel_input_argument + MYSTERY_VALUE) == host_result);
+    // assert((kernel_input_argument + MYSTERY_VALUE) == host_result);
+    for(int i=0; i<N; ++i){
+        std::cout<<C[i]<<std::endl;
+    }
 }
 
 

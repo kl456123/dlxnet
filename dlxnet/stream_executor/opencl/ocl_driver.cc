@@ -175,9 +175,14 @@ namespace stream_executor{
     Status OCLDriver::LaunchKernel(GpuContext context,
             GpuFunctionHandle kernel, cl::NDRange gws, cl::NDRange lws,
             GpuStreamHandle stream){
-        // enqueue
-        stream.enqueueNDRangeKernel(kernel, cl::NullRange,
-                gws, lws);
+        try{
+            // enqueue
+            stream.enqueueNDRangeKernel(kernel, cl::NullRange,
+                    gws, lws);
+        }catch(cl::Error error){
+            return ::dlxnet::errors::Internal(error.what(), "(", error.err(), ")");
+        }
+
         return Status::OK();
     }
 
@@ -194,7 +199,8 @@ namespace stream_executor{
             GpuDevicePtr gpu_src_ptr, uint64 size){
         // make sure context is activated
         GpuStreamHandle stream;
-        GetDefaultStream(context, &stream);
+        CreateStream(context, &stream);
+        // SE_RETURN_IF_ERROR(GetDefaultStream(context, &stream));
         cl::Buffer gpu_src = cl::Buffer(gpu_src_ptr);
         try{
             auto buffer_ptr = stream.enqueueMapBuffer(gpu_src, CL_TRUE, CL_MAP_READ, 0, size);
@@ -210,7 +216,8 @@ namespace stream_executor{
             GpuDevicePtr gpu_dst_ptr, const void* host_src, uint64 size){
         // make sure context is activated
         GpuStreamHandle stream;
-        SE_RETURN_IF_ERROR(GetDefaultStream(context, &stream));
+        CreateStream(context, &stream);
+        // SE_RETURN_IF_ERROR(GetDefaultStream(context, &stream));
         cl::Buffer gpu_dst = cl::Buffer(gpu_dst_ptr);
         auto buffer_ptr = stream.enqueueMapBuffer(gpu_dst, CL_TRUE, CL_MAP_WRITE, 0, size);
         memcpy(buffer_ptr, host_src, size);
