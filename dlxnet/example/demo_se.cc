@@ -10,7 +10,7 @@ void opencl_main(){
     // KERNEL_PTX_TEMPLATE.
     static constexpr int KERNEL_ARITY = 3;
 
-    static constexpr int N = 100;
+    static constexpr int N = 10;
     static constexpr int bytes = N*sizeof(float);
 
     float* A = new float[N];
@@ -19,7 +19,7 @@ void opencl_main(){
     // mock data
     for(int i=0;i<N;i++){
         A[i] = 1.0;
-        B[i] = 2.0;
+        B[i] = 10.0;
     }
 
     static constexpr const char* platform_name = "OpenCL";
@@ -86,13 +86,12 @@ void opencl_main(){
     // Allocate memory in the device memory space to hold the result of the kernel
     // call. This memory will be freed when this object goes out of scope.
     se::ScopedDeviceMemory<float> input0 = executor->AllocateOwnedArray<float>(N);
-    // se::ScopedDeviceMemory<float> input1 = executor->AllocateOwnedArray<float>(N);
-    // se::ScopedDeviceMemory<float> output = executor->AllocateOwnedArray<float>(N);
+    se::ScopedDeviceMemory<float> input1 = executor->AllocateOwnedArray<float>(N);
+    se::ScopedDeviceMemory<float> output = executor->AllocateOwnedArray<float>(N);
 
     // upload data
     executor->SynchronousMemcpyH2D(A, bytes, input0.ptr());
-    executor->SynchronousMemcpyD2H(input0.cref(), bytes, C);
-    // executor->SynchronousMemcpyH2D(B, bytes, input1.ptr());
+    executor->SynchronousMemcpyH2D(B, bytes, input1.ptr());
 
     // Create a stream on which to schedule device operations.
     se::Stream stream(executor);
@@ -101,16 +100,17 @@ void opencl_main(){
     // completes. The kernel call executes asynchronously on the device, so we
     // could do more work on the host before calling BlockHostUntilDone.
     // const float kernel_input_argument = 42.5f;
-    // stream.Init()
-    // .ThenLaunch(se::ThreadDim(), se::BlockDim(N), kernel,
-    // input0.ptr(), input1.ptr(), output.ptr())
-    // .BlockHostUntilDone();
+    stream.Init()
+        .ThenLaunch(se::ThreadDim(), se::BlockDim(N), kernel,
+                input0.ptr(), input1.ptr(), output.ptr())
+        .BlockHostUntilDone();
 
     // Copy the result of the kernel call from device back to the host.
     // executor->SynchronousMemcpyD2H(output.cref(), bytes, C);
 
     // Verify that the correct result was computed.
     // assert((kernel_input_argument + MYSTERY_VALUE) == host_result);
+    executor->SynchronousMemcpyD2H(output.cref(), bytes, C);
     for(int i=0; i<N; ++i){
         std::cout<<C[i]<<std::endl;
     }

@@ -200,15 +200,17 @@ namespace stream_executor{
         // make sure context is activated
         GpuStreamHandle stream;
         CreateStream(context, &stream);
-        // SE_RETURN_IF_ERROR(GetDefaultStream(context, &stream));
-        cl::Buffer gpu_src = cl::Buffer(gpu_src_ptr);
-        try{
-            auto buffer_ptr = stream.enqueueMapBuffer(gpu_src, CL_TRUE, CL_MAP_READ, 0, size);
-            memcpy(host_dst, buffer_ptr, size);
-            stream.enqueueUnmapMemObject(gpu_src, buffer_ptr);
-        }catch(cl::Error error) {
-            return ::dlxnet::errors::Internal(error.what(), "(", error.err(), ")");
+
+        cl_int err;
+        void* buffer_ptr = clEnqueueMapBuffer(stream(), gpu_src_ptr, CL_TRUE, CL_MAP_READ,
+                0, size, 0, 0, 0, &err);
+        memcpy(host_dst, buffer_ptr, size);
+
+        clEnqueueUnmapMemObject(stream(), gpu_src_ptr, buffer_ptr, 0, 0, 0);
+        if(err!=CL_SUCCESS){
+            return ::dlxnet::errors::Internal("SynchronousMemcpyD2H Failed with error code: ", err);
         }
+
         return Status::OK();
     }
 
@@ -217,11 +219,15 @@ namespace stream_executor{
         // make sure context is activated
         GpuStreamHandle stream;
         CreateStream(context, &stream);
-        // SE_RETURN_IF_ERROR(GetDefaultStream(context, &stream));
-        cl::Buffer gpu_dst = cl::Buffer(gpu_dst_ptr);
-        auto buffer_ptr = stream.enqueueMapBuffer(gpu_dst, CL_TRUE, CL_MAP_WRITE, 0, size);
+        cl_int err;
+        void* buffer_ptr = clEnqueueMapBuffer(stream(), gpu_dst_ptr, CL_TRUE, CL_MAP_WRITE,
+                0, size, 0, 0, 0, &err);
         memcpy(buffer_ptr, host_src, size);
-        stream.enqueueUnmapMemObject(gpu_dst, buffer_ptr);
+        clEnqueueUnmapMemObject(stream(), gpu_dst_ptr, buffer_ptr, 0, 0, 0);
+        if(err!=CL_SUCCESS){
+            return ::dlxnet::errors::Internal("SynchronousMemcpyH2D Failed with error code: ", err);
+        }
+
         return Status::OK();
     }
 
