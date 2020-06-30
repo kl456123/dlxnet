@@ -3,6 +3,7 @@
 #include "dlxnet/core/common_runtime/gpu/gpu_cudamalloc_allocator.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_bfc_allocator.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_id_manager.h"
+#include "dlxnet/core/common_runtime/gpu/gpu_id_utils.h"
 #include "dlxnet/core/platform/macros.h"
 #include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/lib/strings/strcat.h"
@@ -71,6 +72,7 @@ namespace dlxnet{
             }
 
             GPUMemAllocator* sub_allocator = new GPUMemAllocator(
+                    GpuIdUtil::ExecutorForPlatformGpuId(platform_gpu_id).ValueOrDie(),
                     platform_gpu_id,
                     (options.per_process_gpu_memory_fraction() > 1.0 ||
                      options.experimental().use_unified_memory()),

@@ -2,7 +2,7 @@
 #define DLXNET_CORE_COMMON_RUNTIME_GPU_GPU_MEM_ALLOCATOR_H_
 #include "dlxnet/core/common_runtime/gpu/gpu_id.h"
 #include "dlxnet/core/framework/allocator.h"
-#include "dlxnet/core/framework/logging.h"
+#include "dlxnet/core/platform/stream_executor.h"
 
 namespace dlxnet{
     // Suballocator for GPU memory.
@@ -11,13 +11,15 @@ namespace dlxnet{
             // 'platform_gpu_id' refers to the ID of the GPU device within
             // the process and must reference a valid ID in the process.
             // Note: stream_exec cannot be null.
-            explicit GPUMemAllocator(PlatformGpuId gpu_id, bool use_unified_memory,
+            explicit GPUMemAllocator(se::StreamExecutor* stream_exec,
+                    PlatformGpuId gpu_id, bool use_unified_memory,
                     const std::vector<Visitor>& alloc_visitors,
                     const std::vector<Visitor>& free_visitors)
                 : SubAllocator(alloc_visitors, free_visitors),
+                stream_exec_(stream_exec),
                 gpu_id_(gpu_id),
                 use_unified_memory_(use_unified_memory) {
-                    // CHECK(stream_exec_ != nullptr);
+                    CHECK(stream_exec_ != nullptr);
                 }
             ~GPUMemAllocator() override {}
 
@@ -27,7 +29,7 @@ namespace dlxnet{
                     // if (use_unified_memory_) {
                     // ptr = stream_exec_->UnifiedMemoryAllocate(num_bytes);
                     // } else {
-                    // ptr = stream_exec_->AllocateArray<char>(num_bytes).opaque();
+                    ptr = stream_exec_->AllocateArray<char>(num_bytes).opaque();
                     // }
                     VisitAlloc(ptr, gpu_id_, num_bytes);
                 }
@@ -37,15 +39,16 @@ namespace dlxnet{
             void Free(void* ptr, size_t num_bytes) override {
                 if (ptr != nullptr) {
                     VisitFree(ptr, gpu_id_, num_bytes);
-                    if (use_unified_memory_) {
-                        // stream_exec_->UnifiedMemoryDeallocate(ptr);
-                        // } else {
-                        // se::DeviceMemoryBase gpu_ptr(ptr);
-                        // stream_exec_->Deallocate(&gpu_ptr);
-                }
+                    // if (use_unified_memory_) {
+                    // stream_exec_->UnifiedMemoryDeallocate(ptr);
+                    // } else {
+                    se::DeviceMemoryBase gpu_ptr(ptr);
+                    stream_exec_->Deallocate(&gpu_ptr);
+                    // }
                 }
             }
         private:
+            se::StreamExecutor* stream_exec_;  // not owned, non-null
             const PlatformGpuId gpu_id_;
             const bool use_unified_memory_ = false;
 

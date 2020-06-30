@@ -89,7 +89,7 @@ if (BUILD_CUDA)
     set(CUDA_PROPAGATE_HOST_FLAGS OFF)
     # set(CUDA_HOST_COMPILER clang++)
 
-    add_definitions(-DGOOGLE_CUDA)
+    # add_definitions(-DGOOGLE_CUDA)
 endif()
 
 if (BUILD_OPENCL)

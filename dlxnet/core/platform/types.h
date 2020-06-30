@@ -56,10 +56,10 @@ typedef uint64 Fprint;
 }  // namespace dlxnet
 
 // Alias namespace ::stream_executor as ::tensorflow::se.
-// namespace stream_executor {}
-// namespace tensorflow {
-// namespace se = ::stream_executor;
-// }  // namespace tensorflow
+namespace stream_executor {}
+namespace dlxnet {
+namespace se = ::stream_executor;
+}  // namespace dlxnet
 
 #if defined(PLATFORM_WINDOWS)
 #include <cstddef>

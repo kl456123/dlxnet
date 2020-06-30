@@ -121,7 +121,9 @@ Status LoadGraph(const string& graph_file_name,
     return dlxnet::errors::NotFound("Failed to load compute graph at '",
                                         graph_file_name, "'");
   }
-  session->reset(dlxnet::NewSession(dlxnet::SessionOptions()));
+  auto options = dlxnet::SessionOptions();
+  options.config.mutable_gpu_options()->set_visible_device_list("0");
+  session->reset(dlxnet::NewSession(options));
   Status session_create_status = (*session)->Create(graph_def);
   if (!session_create_status.ok()) {
     return session_create_status;

@@ -30,8 +30,11 @@ Status TestMatMul(){
     dlxnet::GraphDef graph;
     TF_RETURN_IF_ERROR(root.ToGraphDef(&graph));
 
+    auto options = dlxnet::SessionOptions();
+    options.config.mutable_gpu_options()->set_visible_device_list("0");
+
     std::unique_ptr<dlxnet::Session> session(
-            dlxnet::NewSession(dlxnet::SessionOptions()));
+            dlxnet::NewSession(options));
     TF_RETURN_IF_ERROR(session->Create(graph));
 
     std::vector<Tensor> out_tensors;
