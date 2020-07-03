@@ -3,6 +3,7 @@
 #include "dlxnet/core/common_runtime/gpu/gpu_init.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_id.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_id_manager.h"
+#include "dlxnet/core/platform/stream_executor.h"
 
 
 namespace dlxnet{

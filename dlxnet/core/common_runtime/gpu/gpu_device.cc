@@ -1,8 +1,12 @@
 #include "dlxnet/core/common_runtime/gpu/gpu_device.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_id_manager.h"
+#include "dlxnet/core/common_runtime/gpu/gpu_id_utils.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_util.h"
+#include "dlxnet/core/platform/stream_executor.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_process_state.h"
+#include "dlxnet/core/platform/types.h"
 #include "dlxnet/core/lib/core/status.h"
+#include "dlxnet/core/lib/strings/str_util.h"
 #include "dlxnet/core/lib/core/notification.h"
 #include "dlxnet/core/platform/logging.h"
 
@@ -196,11 +200,94 @@ namespace dlxnet{
         return Status::OK();
     }
 
+    namespace{
+        // Parse 'visible_device_list' into a list of platform GPU ids.
+        Status ParseVisibleDeviceList(const string& visible_device_list,
+                std::vector<PlatformGpuId>* visible_gpu_order) {
+            visible_gpu_order->clear();
+            se::Platform* gpu_manager = GPUMachineManager();
+
+            // If the user wants to remap the visible to virtual GPU mapping,
+            // check for that here.
+            if (visible_device_list.empty()) {
+                visible_gpu_order->resize(gpu_manager->VisibleDeviceCount());
+                // By default, visible to virtual mapping is unchanged.
+                int deviceNo = 0;
+                std::generate(visible_gpu_order->begin(), visible_gpu_order->end(),
+                        [&deviceNo] { return deviceNo++; });
+            }else{
+                const std::vector<string> order_str =
+                    str_util::Split(visible_device_list, ',');
+                for (const string& platform_gpu_id_str : order_str) {
+                    int32 platform_gpu_id;
+                    if (!strings::safe_strto32(platform_gpu_id_str, &platform_gpu_id)) {
+                        return errors::InvalidArgument(
+                                "Could not parse entry in 'visible_device_list': '",
+                                platform_gpu_id_str,
+                                "'. visible_device_list = ", visible_device_list);
+                    }
+                    if (platform_gpu_id < 0 ||
+                            platform_gpu_id >= gpu_manager->VisibleDeviceCount()) {
+                        return errors::InvalidArgument(
+                                "'visible_device_list' listed an invalid GPU id '", platform_gpu_id,
+                                "' but visible device count is ",
+                                gpu_manager->VisibleDeviceCount());
+                    }
+                    visible_gpu_order->push_back(PlatformGpuId(platform_gpu_id));
+                }
+            }
+            // Validate no repeats.
+            std::set<PlatformGpuId> visible_device_set(visible_gpu_order->begin(),
+                    visible_gpu_order->end());
+            if (visible_device_set.size() != visible_gpu_order->size()) {
+                return errors::InvalidArgument(
+                        "visible_device_list contained a duplicate entry: ",
+                        visible_device_list);
+            }
+            return Status::OK();
+        }
+    } // namespace
+
 
     // device factory
     Status BaseGPUDeviceFactory::CreateDevices(
             const SessionOptions& options, const string& name_prefix,
             std::vector<std::unique_ptr<Device>>* devices) {
+        TF_RETURN_IF_ERROR(ValidateGPUMachineManager());
+        se::Platform* gpu_manager = GPUMachineManager();
+        if (gpu_manager == nullptr) {
+            return Status::OK();
+        }
+        // If there are no GPUs visible, do nothing.
+        if (gpu_manager->VisibleDeviceCount() <= 0) {
+            return Status::OK();
+        }
+
+        size_t num_gpus_to_use = INT_MAX;
+        auto iter = options.config.device_count().find("GPU");
+        if (iter != options.config.device_count().end()) {
+            num_gpus_to_use = iter->second;
+        }
+
+        const auto& gpu_options = options.config.gpu_options();
+        std::vector<PlatformGpuId> visible_gpu_order;
+        std::vector<PlatformGpuId> valid_platform_gpu_ids;
+        // If we aren't going to use any GPUs, don't initialize them.
+        // We don't want to call ParseVisibleDeviceList if num_gpus_to_use is 0,
+        // because it treats an empty gpu_options.visible_device_list as 'all GPUs
+        // are visible'.
+        if (num_gpus_to_use > 0) {
+            TF_RETURN_IF_ERROR(ParseVisibleDeviceList(gpu_options.visible_device_list(),
+                        &visible_gpu_order));
+            bool new_gpu_found = false;
+            for (int i = 0; i < visible_gpu_order.size(); ++i) {
+                int visible_gpu_id = visible_gpu_order[i];
+            }
+        }
+
+        if (num_gpus_to_use > valid_platform_gpu_ids.size()) {
+            num_gpus_to_use = valid_platform_gpu_ids.size();
+        }
 
         return Status::OK();
     }

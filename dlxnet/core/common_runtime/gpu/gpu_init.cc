@@ -22,6 +22,6 @@ namespace dlxnet{
     string GpuPlatformName() {
         // This function will return "CUDA" even when building TF without GPU support
         // This is done to preserve existing functionality
-        return "CUDA";
+        return "OpenCL";
     }
 }// namespace dlxnet
