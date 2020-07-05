@@ -29,7 +29,15 @@ namespace dlxnet{
     GPUProcessState::GPUProcessState() : gpu_device_enabled_(false) {
         process_state_ = ProcessState::singleton();
     }
-    int GPUProcessState::BusIdForGPU(TfGpuId tf_gpu_id) {}
+    int GPUProcessState::BusIdForGPU(TfGpuId tf_gpu_id) {
+        // Return the NUMA node associated with the GPU's StreamExecutor.
+        se::StreamExecutor* se =
+            GpuIdUtil::ExecutorForTfGpuId(tf_gpu_id).ValueOrDie();
+        int numa_node = se->GetDeviceDescription().numa_node();
+        // bus_id must be non-negative.  If the numa_node is not known,
+        // use 0.
+        return numa_node >= 0 ? numa_node : 0;
+    }
 
     Allocator* GPUProcessState::GetGpuHostAllocator(int numa_node) {
         CHECK(process_state_);

@@ -8,11 +8,6 @@
 
 namespace stream_executor{
     using port::Status;
-    namespace{
-        cl::Platform platform_;
-        std::vector<cl::Device> devices_;
-        bool initialized_ = false;
-    }// namespace
 
     class OCLDriver{
         public:
@@ -64,15 +59,11 @@ namespace stream_executor{
                     GpuDevicePtr gpu_dst,
                     GpuDevicePtr gpu_src, uint64 size);
 
-            static int GetDeviceCount(){
-                return devices_.size();
-            }
+            static int GetDeviceCount();
 
             void DestroyContext();
 
-            static bool Initialized(){
-                return initialized_;
-            }
+            static bool Initialized();
 
             static Status GetDefaultStream(GpuContext context, GpuStreamHandle* stream);
         private:

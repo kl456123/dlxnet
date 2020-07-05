@@ -246,7 +246,155 @@ namespace dlxnet{
             }
             return Status::OK();
         }
+
+        Status VerifyVirtualDeviceSettings(
+                const size_t num_gpus_to_use, const GPUOptions& gpu_options,
+                const std::vector<PlatformGpuId>& visible_gpu_order,
+                const std::vector<PlatformGpuId>& valid_platform_gpu_ids) {
+            const auto& virtual_devices = gpu_options.experimental().virtual_devices();
+            CHECK(!virtual_devices.empty());
+            if (gpu_options.per_process_gpu_memory_fraction() > 0) {
+                return errors::InvalidArgument(
+                        "It's invalid to set per_process_gpu_memory_fraction when "
+                        "virtual_devices is set.");
+            }
+            if (num_gpus_to_use < virtual_devices.size()) {
+                return errors::Unknown(
+                        "Not enough GPUs to create virtual devices."
+                        " num_gpus_to_use: ",
+                        num_gpus_to_use, " #virtual_devices: ", virtual_devices.size());
+            }
+
+            if (!gpu_options.visible_device_list().empty() &&
+                    visible_gpu_order.size() != virtual_devices.size()) {
+                return errors::InvalidArgument(
+                        "The number of GPUs in visible_device_list doesn't match the number "
+                        "of elements in the virtual_devices list.",
+                        " #GPUs in visible_device_list: ", visible_gpu_order.size(),
+                        " virtual_devices.size(): ", virtual_devices.size());
+            }
+            if (valid_platform_gpu_ids.size() != virtual_devices.size()) {
+                return errors::Unknown(
+                        "The number of valid GPUs doesn't match the number of elements in "
+                        "the virtual_devices list.",
+                        " #valid GPUs: ", valid_platform_gpu_ids.size(),
+                        " virtual_devices.size(): ", virtual_devices.size());
+            }
+            return Status::OK();
+        }
+
+        int64 MinSystemMemory(int64 available_memory) {
+            // We use the following heuristic for now:
+            //
+            // If the available_memory is < 2GiB, we allocate 225MiB to system memory.
+            // Otherwise, allocate max(300MiB, 0.05 * available_memory) to system memory.
+            //
+            // In the future we could be more sophisticated by using a table of devices.
+            int64 min_system_memory;
+            if (available_memory < (1LL << 31)) {
+                // 225MiB
+                min_system_memory = 225 * 1024 * 1024;
+            } else {
+                // max(300 MiB, 0.05 * available_memory)
+                min_system_memory =
+                    std::max(int64{314572800}, static_cast<int64>(available_memory * 0.05));
+            }
+
+            VLOG(5) << "available_memory = " << available_memory;
+            VLOG(5) << "min_system_memory = " << min_system_memory;
+            return min_system_memory;
+        }
+
+        // Get the memory limit for the virtual device being created on GPU with
+        // 'platform_gpu_id', when that virtual device is the only virtual device being
+        // created on that GPU.
+        Status SingleVirtualDeviceMemoryLimit(const GPUOptions& gpu_options,
+                PlatformGpuId platform_gpu_id,
+                int64* memory_limit) {
+
+            int64 total_memory = 0;
+            int64 available_memory = 0;
+            se::StreamExecutor* se =
+                GpuIdUtil::ExecutorForPlatformGpuId(platform_gpu_id).ValueOrDie();
+            // if (!se->DeviceMemoryUsage(&available_memory, &total_memory)) {
+            // return errors::Unknown("Failed to query available memory for GPU ",
+            // platform_gpu_id);
+            // }
+            available_memory = 225 * 1024 * 1024;
+
+            int64 allocated_memory = 0;
+            const double per_process_gpu_memory_fraction =
+                gpu_options.per_process_gpu_memory_fraction();
+            if (per_process_gpu_memory_fraction > 1.0 ||
+                    gpu_options.experimental().use_unified_memory()) {
+                // check device support unified memory
+            }
+
+            if (per_process_gpu_memory_fraction == 0) {
+                // use all left gpu memory, sys mem is not included by memory_limit
+                allocated_memory = available_memory;
+                const int64 min_system_memory = MinSystemMemory(available_memory);
+                if (min_system_memory < allocated_memory) {
+                    allocated_memory -= min_system_memory;
+                }
+            } else {
+                allocated_memory = total_memory * per_process_gpu_memory_fraction;
+            }
+            *memory_limit = allocated_memory;
+            return Status::OK();
+        }
     } // namespace
+
+    Status BaseGPUDeviceFactory::GetDeviceLocalities(
+            int num_tf_gpus, LocalityMap* localities) {
+        std::vector<TfGpuId> all_tf_gpu_ids;
+        all_tf_gpu_ids.reserve(num_tf_gpus);
+        for (int i = 0; i < num_tf_gpus; ++i) {
+            all_tf_gpu_ids.push_back(TfGpuId(i));
+        }
+
+        for (TfGpuId tf_gpu_id : all_tf_gpu_ids) {
+            PlatformGpuId platform_gpu_id;
+            TF_RETURN_IF_ERROR(
+                    GpuIdManager::TfToPlatformGpuId(tf_gpu_id, &platform_gpu_id));
+            // Get GPU bus_id from its reported NUMA affinity.  Because GPUs are
+            // virtualized in some environments, we can't just use the GPU id.
+            // NUMA locales are indexed from 0, buses are indexed from 1.
+            se::Platform* gpu_manager = GPUMachineManager();
+            auto desc_status =
+                gpu_manager->DescriptionForDevice(platform_gpu_id);
+            if (!desc_status.ok()) {
+                return desc_status.status();
+            }
+            auto desc = desc_status.ConsumeValueOrDie();
+            int numa_node = desc->numa_node();
+
+            if (numa_node < 0) {
+                // For some reason the StreamExecutor couldn't get the NUMA
+                // affinity of the GPU.  If this is not a multi-socket mobo with
+                // GPUs local to different buses, it doesn't matter.  If it is, we
+                // may run into trouble later with data transfer operations.  The
+                // trouble may manifest as slower than expected performance, or
+                // outright failures.
+                LOG(INFO) << "Could not identify NUMA node of platform GPU id "
+                    << platform_gpu_id
+                    << ", defaulting to 0.  Your kernel may not have been built "
+                    << "with NUMA support.";
+                numa_node = 0;
+            }
+            DeviceLocality dev_locality;
+            dev_locality.set_numa_node(numa_node);
+            dev_locality.set_bus_id(numa_node + 1);
+
+            (*localities)[tf_gpu_id] = dev_locality;
+            VLOG(1) << "GPUDevice PlatformGpuId " << platform_gpu_id << " TfGpuId "
+                << tf_gpu_id << " on bus " << dev_locality.bus_id()
+                << " numa: " << numa_node << " pci: " << desc->pci_bus_id()
+                << " DeviceLocality: " << dev_locality.DebugString();
+        }
+
+        return Status::OK();
+    }
 
 
     // device factory
@@ -282,11 +430,82 @@ namespace dlxnet{
             bool new_gpu_found = false;
             for (int i = 0; i < visible_gpu_order.size(); ++i) {
                 int visible_gpu_id = visible_gpu_order[i];
+
+                // Only perform this once per visible gpu id.
+                if (visible_gpu_initialized_[visible_gpu_id]) {
+                    continue;
+                }
+
+                visible_gpu_initialized_[visible_gpu_id] = true;
+                new_gpu_found = true;
             }
+
+            TF_RETURN_IF_ERROR(
+                    GetValidDeviceIds(visible_gpu_order, &valid_platform_gpu_ids));
         }
 
         if (num_gpus_to_use > valid_platform_gpu_ids.size()) {
             num_gpus_to_use = valid_platform_gpu_ids.size();
+        }
+
+        if (!valid_platform_gpu_ids.empty()) {
+            // Save the original device.
+            int original_device = 0;
+        }
+
+        const auto& virtual_devices = gpu_options.experimental().virtual_devices();
+        if (!virtual_devices.empty()) {
+            TF_RETURN_IF_ERROR(VerifyVirtualDeviceSettings(num_gpus_to_use, gpu_options,
+                        visible_gpu_order,
+                        valid_platform_gpu_ids));
+            // We've verified that num_gpus_to_use >= virtual_devices.size().
+            num_gpus_to_use = virtual_devices.size();
+            CHECK(gpu_options.visible_device_list().empty() ||
+                    valid_platform_gpu_ids == visible_gpu_order);
+        }
+
+        // including virtual devices
+        int next_gpu_id = 0;
+        std::vector<int64> memory_limit_bytes;
+        for (int i = 0; i < num_gpus_to_use; ++i) {
+            const PlatformGpuId platform_gpu_id = valid_platform_gpu_ids[i];
+            if (virtual_devices.empty() ||
+                    virtual_devices.Get(i).memory_limit_mb_size() == 0) {
+                int64 single_virtual_device_memory_limit = 0;
+                TF_RETURN_IF_ERROR(SingleVirtualDeviceMemoryLimit(
+                            gpu_options, platform_gpu_id, &single_virtual_device_memory_limit));
+                memory_limit_bytes.push_back(single_virtual_device_memory_limit);
+            } else {
+                const auto& memory_limit_mb = virtual_devices.Get(i).memory_limit_mb();
+                std::transform(memory_limit_mb.begin(), memory_limit_mb.end(),
+                        std::back_inserter(memory_limit_bytes), [](float mb) {
+                        return static_cast<int64>(mb) * (1ll << 20);
+                        });
+            }
+
+            while (next_gpu_id < memory_limit_bytes.size()) {
+                TfGpuId gpu_id(next_gpu_id);
+                ++next_gpu_id;
+                TF_RETURN_IF_ERROR(
+                        GpuIdManager::InsertTfPlatformGpuIdPair(gpu_id, platform_gpu_id));
+            }
+        }
+
+        const int num_gpus = next_gpu_id;
+        LocalityMap device_localities;
+        TF_RETURN_IF_ERROR(
+                GetDeviceLocalities(num_gpus, &device_localities));
+
+        for (int di = 0; di < num_gpus; ++di) {
+            TfGpuId tf_gpu_id(di);
+            int64 bytes = memory_limit_bytes[di];
+            auto it = device_localities.find(tf_gpu_id);
+            if (it == device_localities.end()) {
+                return errors::Internal("Failed to find DeviceLocality for GPU device ",
+                        tf_gpu_id);
+            }
+            TF_RETURN_IF_ERROR(CreateGPUDevice(options, name_prefix, tf_gpu_id, bytes,
+                        it->second, devices));
         }
 
         return Status::OK();
@@ -360,8 +579,44 @@ namespace dlxnet{
     Status BaseGPUDeviceFactory::GetValidDeviceIds(
             const std::vector<PlatformGpuId>& visible_gpu_order,
             std::vector<PlatformGpuId>* ids) {
+        se::Platform* gpu_manager = GPUMachineManager();
         for (int i = 0; i < visible_gpu_order.size(); ++i) {
             int visible_gpu_id = visible_gpu_order[i];
+            auto description_status = gpu_manager->DescriptionForDevice(visible_gpu_id);
+            if (!description_status.ok()) {
+                return description_status.status();
+            }
+
+            auto description = description_status.ConsumeValueOrDie();
+            // check gpu version and its computeCapability
+            LOG(INFO) << "Found device " << i << " with properties: "
+                << "\npciBusID: " << description->pci_bus_id()
+                << " name: " << description->name();
+        }
+
+        // Filter out devices that don't have the right capability or power.
+        for (int i = 0; i < visible_gpu_order.size(); ++i) {
+            const PlatformGpuId visible_gpu_id = visible_gpu_order[i];
+            auto description_status =
+                gpu_manager->DescriptionForDevice(visible_gpu_id);
+            if (!description_status.ok()) {
+                LOG(INFO) << "Ignoring visible gpu device " << visible_gpu_id
+                    << " whose executor is in invalid state: "
+                    << description_status.status().ToString();
+                continue;
+            }
+
+            auto desc = description_status.ConsumeValueOrDie();
+
+            // here we just check nothing to use all ids
+            ids->push_back(visible_gpu_id);
+        }
+
+        if (!ids->empty()) {
+            std::vector<int> raw_ids(ids->size());
+            std::transform(ids->begin(), ids->end(), raw_ids.begin(),
+                    [](PlatformGpuId id) -> int { return id; });
+            LOG(INFO) << "Adding visible gpu devices: " << absl::StrJoin(raw_ids, ", ");
         }
         return Status::OK();
     }

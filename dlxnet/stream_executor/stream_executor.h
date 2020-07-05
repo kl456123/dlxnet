@@ -141,6 +141,16 @@ namespace stream_executor{
             // Does not take ownership of listener.
             void RegisterTraceListener(TraceListener* listener);
 
+            // Returns the underlying device memory usage information, if it is available.
+            // If it is not available (false is returned), free/total may not be
+            // initialized.
+            //
+            // Note: "Free" reflects the amount of free memory on the underlying device,
+            // so allocations via other StreamExecutors that have the same underlying
+            // device
+            // will be reflected in "free".
+            bool DeviceMemoryUsage(int64 *free, int64 *total) const;
+
             // Removes a TraceListener from this StreamExecutor instance.
             // Returns false (and logs) in cases where the argument listener was not
             // previously registered.
@@ -165,6 +175,10 @@ namespace stream_executor{
 
             // Records a stop event for an interval timer.
             bool StopTimer(Stream *stream, Timer *timer);
+
+            // Allocates a new metadata object, appropriately populated, on the heap, with
+            // ownership transfer to caller.
+            std::unique_ptr<DeviceDescription> CreateDeviceDescription() const;
 
             // Performs platform-specific allocation and initialization of an event.
             port::Status AllocateEvent(Event *event);
@@ -240,6 +254,10 @@ namespace stream_executor{
             port::Status Launch(Stream *stream, const ThreadDim &thread_dims,
                     const BlockDim &block_dims, const KernelBase &kernel,
                     const KernelArgsArrayBase &args);
+
+            // Obtains metadata about the underlying device.
+            // The value is cached on first use.
+            const DeviceDescription &GetDeviceDescription() const;
 
         private:
             friend class Event;

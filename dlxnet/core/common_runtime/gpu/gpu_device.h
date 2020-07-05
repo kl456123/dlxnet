@@ -73,6 +73,12 @@ namespace dlxnet{
             Status ListPhysicalDevices(std::vector<string>* devices) override;
             Status CreateDevices(const SessionOptions& options, const string& name_prefix,
                     std::vector<std::unique_ptr<Device>>* devices) override;
+
+        protected:
+            typedef std::unordered_map<TfGpuId, DeviceLocality> LocalityMap;
+            // Populates *localities with the DeviceLocality descriptor for
+            // every TfGpuId.
+            virtual Status GetDeviceLocalities(int num_tf_gpus, LocalityMap* localities);
         private:
             // Creates a BaseGPUDevice associated with 'tf_gpu_id', allocates (strictly)
             // 'memory_limit' bytes of GPU memory to it, and adds it to the 'devices'

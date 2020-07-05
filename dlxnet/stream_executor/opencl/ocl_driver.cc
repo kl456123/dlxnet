@@ -10,6 +10,12 @@
 #include "dlxnet/core/lib/core/errors.h"
 
 namespace stream_executor{
+    namespace{
+        cl::Platform platform_;
+        std::vector<cl::Device> devices_;
+        bool initialized_ = false;
+    }// namespace
+
     GpuStreamHandle OCLDriver::default_stream_;
 
     Status OCLDriver::Init(){
@@ -19,6 +25,14 @@ namespace stream_executor{
         CHECK(!Initialized())<<"Platform is Initialized by multiple times!";
         initialized_ = true;
         return Status::OK();
+    }
+
+    /*static*/ int OCLDriver::GetDeviceCount(){
+        return devices_.size();
+    }
+
+    /*static*/ bool OCLDriver::Initialized(){
+        return initialized_;
     }
 
     Status OCLDriver::CreateDevicesList(std::vector<cl::Device>* devices){

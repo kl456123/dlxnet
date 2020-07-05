@@ -337,5 +337,24 @@ namespace stream_executor{
         return implementation_->Launch(stream, thread_dims, block_dims, kernel, args);
     }
 
+    bool StreamExecutor::DeviceMemoryUsage(int64 *free, int64 *total) const {
+        return implementation_->DeviceMemoryUsage(free, total);
+    }
+
+    const DeviceDescription &StreamExecutor::GetDeviceDescription() const {
+        if (device_description_ != nullptr) {
+            return *device_description_;
+        }
+
+        device_description_ = CreateDeviceDescription();
+        return *device_description_;
+    }
+
+    std::unique_ptr<DeviceDescription> StreamExecutor::CreateDeviceDescription()
+        const {
+            auto desc_status = implementation_->CreateDeviceDescription();
+            return desc_status.ConsumeValueOrDie();
+        }
+
 
 }//namespace stream_executor
