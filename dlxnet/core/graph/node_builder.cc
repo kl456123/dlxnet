@@ -16,6 +16,9 @@ namespace dlxnet{
         :def_builder_(name, op_def){
         }
 
+    NodeBuilder::NodeBuilder(const NodeDefBuilder& def_builder)
+        : def_builder_(def_builder) {}
+
     NodeBuilder& NodeBuilder::Input(Node* src_node, int src_index){
         inputs_.emplace_back(src_node, src_index);
         // get data type
@@ -26,15 +29,33 @@ namespace dlxnet{
         return *this;
     }
 
+    NodeBuilder& NodeBuilder::Input(gtl::ArraySlice<NodeOut> src_list) {
+        // std::vector<NodeDefBuilder::NodeOut> srcs;
+        // srcs.reserve(src_list.size());
+        // for (const auto& node_out : src_list) {
+            // srcs.emplace_back(node_out.name, node_out.index, node_out.dt);
+            // inputs_.emplace_back(node_out.node, node_out.index);
+        // }
+        // def_builder_.Input(gtl::ArraySlice<NodeDefBuilder::NodeOut>(srcs));
+        return *this;
+    }
+
+    NodeBuilder& NodeBuilder::Device(StringPiece device_spec) {
+        def_builder_.Device(device_spec);
+        return *this;
+    }
+
+    NodeBuilder& NodeBuilder::AssignedDevice(StringPiece device) {
+        assigned_device_ = string(device);
+        return *this;
+    }
+
     NodeBuilder& NodeBuilder::Input(NodeOut src){
         inputs_.emplace_back(src.node, src.index);
         def_builder_.Input(src.name, src.index, src.dt);
         return *this;
     }
-    NodeBuilder& NodeBuilder::Device(const string& device_spec){
-        def_builder_.Device(device_spec);
-        return *this;
-    }
+
 
     Status NodeBuilder::Finalize(Graph* graph, Node** created_node){
         // clear first
@@ -54,6 +75,8 @@ namespace dlxnet{
         if(!status.ok()){
             return status;
         }
+
+        node->set_assigned_device_name(assigned_device_);
 
         // add edge
         for(int i=0;i<inputs_.size();i++){

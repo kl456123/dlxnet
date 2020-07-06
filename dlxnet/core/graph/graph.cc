@@ -74,6 +74,25 @@ namespace dlxnet{
 
     AttrSlice Node::attrs() const { return AttrSlice(def()); }
 
+    const string& Node::requested_device() const { return def().device(); }
+
+    void Node::MaybeCopyOnWrite() {
+        // NodeProperties may be shared between Nodes. Make a copy if so.
+        if (!props_.unique()) {
+            props_ = std::make_shared<NodeProperties>(*props_);
+        }
+    }
+
+    void Node::set_name(string name) {
+        MaybeCopyOnWrite();
+        props_->node_def.set_name(std::move(name));
+    }
+
+    void Node::set_requested_device(const string& device) {
+        MaybeCopyOnWrite();
+        props_->node_def.set_device(device);
+    }
+
     // Graph implementation
     Graph::Graph(const OpRegistryInterface* ops)
         :ops_(OpRegistry::Global()),

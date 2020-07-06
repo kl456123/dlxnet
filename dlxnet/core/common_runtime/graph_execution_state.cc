@@ -64,7 +64,14 @@ namespace dlxnet{
         TF_RETURN_IF_ERROR(OptimizationPassRegistry::Global()->RunGrouping(
                     OptimizationPassRegistry::PRE_PLACEMENT, optimization_options));
         // placement
-        Placer placer;
+        Placer placer(new_graph.get(), "", nullptr, device_set_,
+                  /* default_local_device= */ nullptr,
+                  session_options_ == nullptr ||
+                      session_options_->config.allow_soft_placement(),
+                  session_options_ != nullptr &&
+                      session_options_->config.log_device_placement());
+    // TODO(mrry): Consider making the Placer cancelable.
+    TF_RETURN_IF_ERROR(placer.Run());
         TF_RETURN_IF_ERROR(placer.Run());
         // post optimize
         TF_RETURN_IF_ERROR(OptimizationPassRegistry::Global()->RunGrouping(

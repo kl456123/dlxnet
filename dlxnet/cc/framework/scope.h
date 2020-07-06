@@ -40,6 +40,14 @@ namespace dlxnet{
                     return WithOpNameImpl(absl::StrCat(fragments...));
                 }
 
+            /// Return a new scope. All ops created within the returned scope will have
+            /// the device field set to 'device'.
+            Scope WithDevice(const string& device) const;
+
+            /// Returns a new scope.  All ops created within the returned scope will have
+            /// their assigned device set to `assigned_device`.
+            Scope WithAssignedDevice(const string& assigned_device) const;
+
             /// If status() is Status::OK(), convert the Graph object stored in this scope
             /// to a GraphDef proto and return Status::OK(). Otherwise, return the error
             /// status as is without performing GraphDef conversion.

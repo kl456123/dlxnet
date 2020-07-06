@@ -31,6 +31,15 @@ namespace dlxnet{
             int id() const { return id_; }
             void set_name(string name);
             const string& type_string()const;
+
+            // The device requested by the user.  For the actual assigned device,
+            // use assigned_device_name() below.
+            const string& requested_device() const;
+
+            // This changes the user requested device but not necessarily the device that
+            // on which the operation will run.
+            void set_requested_device(const string& device);
+
             // This gives the device the runtime has assigned this node to.  If
             // you want the device the user requested, use def().device() instead.
             // TODO(josh11b): Validate that the assigned_device, if not empty:
@@ -111,6 +120,11 @@ namespace dlxnet{
             NodeProperties* properties() const { return props_.get(); }
 
             void Initialize(int id,  std::shared_ptr<NodeProperties> props);
+
+            // Make a copy of the Node's props_ if props_ is shared with
+            // other nodes. This must be called before mutating properties,
+            // e.g. in AddAttr.
+            void MaybeCopyOnWrite();
 
 
             enum NodeClass{

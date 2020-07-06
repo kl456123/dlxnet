@@ -56,6 +56,7 @@ namespace dlxnet{
         refiner_(other.impl()->refiner_),
         name_(name),
         op_name_(""),
+        assigned_device_(other.impl()->assigned_device_),
         device_(other.impl()->device_){}
 
 
@@ -67,7 +68,29 @@ namespace dlxnet{
         refiner_(other.impl()->refiner_),
         name_(name),
         op_name_(op_name),
+        assigned_device_(other.impl()->assigned_device_),
         device_(other.impl()->device_){}
+
+    Scope::Impl::Impl(const Scope& other, Tags::AssignedDevice,
+            const string& assigned_device)
+        : graph_(other.impl()->graph_),
+        status_(other.impl()->status_),
+        name_map_(other.impl()->name_map_),
+        refiner_(other.impl()->refiner_),
+        name_(other.impl()->name_),
+        op_name_(other.impl()->op_name_),
+        device_(other.impl()->device_),
+        assigned_device_(assigned_device){}
+
+    Scope::Impl::Impl(const Scope& other, Tags::Device, const string& device)
+        : graph_(other.impl()->graph_),
+        status_(other.impl()->status_),
+        name_map_(other.impl()->name_map_),
+        refiner_(other.impl()->refiner_),
+        name_(other.impl()->name_),
+        op_name_(other.impl()->op_name_),
+        device_(device),
+        assigned_device_(other.impl()->assigned_device_){}
 
 
     bool Scope::ok() const { return impl()->status_->ok(); }
@@ -96,6 +119,10 @@ namespace dlxnet{
         // add some attributions from local scope to current builder(current node the same)
         if (!impl()->device_.empty()) {
             builder->Device(impl()->device_);
+        }
+
+        if (!impl()->assigned_device_.empty()) {
+            builder->AssignedDevice(impl()->assigned_device_);
         }
     }
 
@@ -144,6 +171,14 @@ namespace dlxnet{
 
     Status Scope::DoShapeInference(Node* node) const {
         return impl_->refiner_->AddNode(node);
+    }
+
+    Scope Scope::WithDevice(const string& device) const {
+        return Scope(new Impl(*this, Impl::Tags::Device(), device));
+    }
+
+    Scope Scope::WithAssignedDevice(const string& assigned_device) const {
+        return Scope(new Impl(*this, Impl::Tags::AssignedDevice(), assigned_device));
     }
 
 

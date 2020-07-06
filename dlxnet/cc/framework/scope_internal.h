@@ -30,6 +30,7 @@ namespace dlxnet{
                 enum class ScopeName;
                 enum class OpName;
                 enum class Device;
+                enum class AssignedDevice;
             };
 
             Impl(Graph* graph, Status* status, NameMap* name_map, ShapeRefiner* refiner);
@@ -37,6 +38,8 @@ namespace dlxnet{
                     bool copy_names);
             Impl(const Scope& other, Tags::OpName, const string& name,
                     const string& op_name);
+            Impl(const Scope& other, Tags::Device, const string& device);
+            Impl(const Scope& other, Tags::AssignedDevice, const string& assigned_device);
 
             // Helper functions to get a unique names.
             string GetUniqueName(const string& prefix) const;

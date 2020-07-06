@@ -78,6 +78,23 @@ namespace dlxnet{
 
             static constexpr const char* const kGradientOp = "SymbolicGradient";
             static constexpr const char* const kFuncAttr = "f";
+
+            // OpRegistryInterface method. Useful for constructing a Graph.
+            //
+            // If "op" is defined in the library, returns its signature.
+            // Otherwise, assume "op" is a primitive op and returns its op
+            // signature and shape inference function.
+            //
+            // NB: This function outputs a borrowed pointer, which can be invalidated by a
+            // subsequent call to `ReplaceFunction()` with the given name.
+            Status LookUp(const string& op_type_name,
+                    const OpRegistrationData** op_reg_data) const override;
+
+            const OpRegistryInterface* default_registry() const {
+                return default_registry_;
+            }
+        private:
+            const OpRegistryInterface* const default_registry_;
     };
 }
 
