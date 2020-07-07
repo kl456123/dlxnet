@@ -789,6 +789,17 @@ namespace dlxnet{
     // Returns a message with a description of the kernels registered for op
     // `op_name`.
     string KernelsRegisteredForOp(StringPiece op_name);
+
+    // Returns into 'device_types' the subset of prioritized_types that this
+    // binary has registered for the given NodeDef.
+    //
+    // REQUIRES: * 'device_types' is not nullptr.
+    //           * def has all attrs specified (e.g. using AddDefaultsToNodeDef()).
+    Status SupportedDeviceTypesForNode(
+            const std::vector<DeviceType>& prioritized_types, const NodeDef& def,
+            PrioritizedDeviceTypeVector* device_types,
+            const DeviceNameUtils::ParsedName* local_address_spec = nullptr);
+
     // Gets a list of all registered kernels for a given op
     KernelList GetRegisteredKernelsForOp(StringPiece op_name);
 

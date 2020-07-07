@@ -105,7 +105,14 @@ namespace dlxnet{
     string FormatNodeForError(const Node& node);
     string FormatNodeDefForError(const NodeDef& node_def);
 
-
+    // Returns "status" with formatted NodeDef attached as additional text
+    // in the error message. If 'allow_multiple_formatted_node' is false and there
+    // is already a formatted NodeDef present in 'status', we simply attach the name
+    // of the NodeDef instead of the formatted string.
+    Status AttachDef(const Status& status, const NodeDef& node_def,
+            bool allow_multiple_formatted_node = false);
+    Status AttachDef(const Status& status, const Node& node,
+            bool allow_multiple_formatted_node = false);
 }
 
 

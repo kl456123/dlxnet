@@ -53,6 +53,8 @@ namespace dlxnet{
     typedef gtl::ArraySlice<DataType> DataTypeSlice;
 
     typedef gtl::InlinedVector<DeviceType, 4> DeviceTypeVector;
+    typedef gtl::InlinedVector<std::pair<DeviceType, int32>, 4>
+        PrioritizedDeviceTypeVector;
 
     // DT_FLOAT + kDataTypeRefOffset == DT_FLOAT_REF, etc.
     enum {kDataTypeRefOffset=100};
@@ -299,6 +301,11 @@ namespace dlxnet{
     bool DataTypeFromString(StringPiece sp, DataType* dt);
     string DataTypeString(DataType dtype);
     string DeviceTypeString(const DeviceType& device_type);
+
+    string DataTypeSliceString(const DataTypeSlice dtypes);
+    inline string DataTypeVectorString(const DataTypeVector& dtypes) {
+        return DataTypeSliceString(dtypes);
+    }
 
     // Returns a 0 on failure
     int DataTypeSize(DataType dt);

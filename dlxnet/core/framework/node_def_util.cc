@@ -313,4 +313,23 @@ namespace dlxnet{
         return node_def.name();
     }
 
+    Status AttachDef(const Status& status, const NodeDef& node_def,
+            bool allow_multiple_formatted_node) {
+        Status ret = status;
+        string node_error;
+        if (!allow_multiple_formatted_node &&
+                status.error_message().find("{{node ") != string::npos) {
+            node_error = node_def.name();
+        } else {
+            node_error = FormatNodeDefForError(node_def);
+        }
+        errors::AppendToMessage(&ret, strings::StrCat(" [[", node_error, "]]"));
+        return ret;
+    }
+
+    Status AttachDef(const Status& status, const Node& node,
+            bool allow_multiple_formatted_node) {
+        return AttachDef(status, node.def(), allow_multiple_formatted_node);
+    }
+
 }// namespace dlxnet

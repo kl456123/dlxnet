@@ -196,6 +196,15 @@ namespace dlxnet{
     int DataTypeSize(DataType dt){
     }
 
+    string DataTypeSliceString(const DataTypeSlice types) {
+        string out;
+        for (auto it = types.begin(); it != types.end(); ++it) {
+            strings::StrAppend(&out, ((it == types.begin()) ? "" : ", "),
+                    DataTypeString(*it));
+        }
+        return out;
+    }
+
 
 
 }

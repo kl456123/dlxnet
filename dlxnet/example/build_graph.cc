@@ -7,13 +7,19 @@
 #include "dlxnet/core/public/session.h"
 #include "dlxnet/cc/ops/const_op.h"
 #include "dlxnet/cc/ops/array_ops.h"
+#include "dlxnet/core/graph/default_device.h"
 
 using dlxnet::string;
 using dlxnet::Status;
 using dlxnet::Scope;
 using dlxnet::Tensor;
 
-Status TestMatMul(){
+struct Options{
+    int num_iterations=100;
+    bool use_gpu=false;
+};
+
+Status TestMatMul(const Options& opts){
     using namespace dlxnet::ops;
     Scope root = Scope::NewRootScope();
     auto a = Const(root, {{1, 2}, {2, 4}});
@@ -27,15 +33,17 @@ Status TestMatMul(){
 
     // This runs the GraphDef network definition that we've just constructed, and
     // returns the results in the output tensor.
-    dlxnet::GraphDef graph;
-    TF_RETURN_IF_ERROR(root.ToGraphDef(&graph));
+    dlxnet::GraphDef graph_def;
+    TF_RETURN_IF_ERROR(root.ToGraphDef(&graph_def));
 
     auto options = dlxnet::SessionOptions();
     options.config.mutable_gpu_options()->set_visible_device_list("0");
 
     std::unique_ptr<dlxnet::Session> session(
             dlxnet::NewSession(options));
-    TF_RETURN_IF_ERROR(session->Create(graph));
+    dlxnet::graph::SetDefaultDevice(opts.use_gpu ? "/device:GPU:0" : "/cpu:0", &graph_def);
+
+    TF_RETURN_IF_ERROR(session->Create(graph_def));
 
     std::vector<Tensor> out_tensors;
     TF_RETURN_IF_ERROR(session->Run({}, {output_name}, {}, &out_tensors));
@@ -44,7 +52,9 @@ Status TestMatMul(){
 }
 
 int main(){
-    Status status = TestMatMul();
+    Options opts;
+    opts.use_gpu = true;
+    Status status = TestMatMul(opts);
     if(!status.ok()){
         LOG(ERROR) << "Test MatMul model failed: " << status;
         return -1;
