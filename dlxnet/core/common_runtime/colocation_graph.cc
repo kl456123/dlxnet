@@ -52,6 +52,27 @@ namespace dlxnet{
         return Status::OK();
     }
 
+    int Member::FindRoot(const std::vector<Member>& tree, int node_id) {
+        const Member& member = tree[node_id];
+        if (member.parent_ == node_id) {
+            return member.parent_;
+        }
+        return FindRoot(tree, member.parent_);
+    }
+
+    Status Member::SetParentAndSupportedDevices(
+            const Node& node, const std::vector<DeviceType>& types,
+            const DeviceNameUtils::ParsedName* local_address_spec) {
+        int id = node.id();
+        if (id < 0) {
+            return errors::Internal("Placer should not be creating a Member for node: ",
+                    node.DebugString());
+        }
+        parent_ = id;
+        return SupportedDeviceTypesForNode(
+                types, node.def(), &supported_device_types_, local_address_spec);
+    }
+
     Status Member::SetResourceDeviceName(const Node& node) {
         if (DeviceNameUtils::HasSomeDetails(requested_device_name_)) {
             return errors::Internal(
@@ -187,7 +208,7 @@ namespace dlxnet{
         }
 
     Status ColocationGraph::Initialize() {
-        // TF_RETURN_IF_ERROR(InitializeMembers());
+        TF_RETURN_IF_ERROR(InitializeMembers());
 
         // std::unordered_set<Node*> inspection_required;
         // TF_RETURN_IF_ERROR(ColocateResourceAndRefEdges(&inspection_required));
@@ -213,6 +234,9 @@ namespace dlxnet{
         Member& root_member = members_[root];
         return root_member.AssignDevice(node);
     }
+
+
+
     Status ColocationGraph::GetDevicesForNode(
             Node* node, const std::vector<Device*>** possible_devices) {
         *possible_devices = nullptr;
@@ -409,5 +433,102 @@ namespace dlxnet{
                 "\nColocation Debug Info:\n"
                 "Colocation group had the following types and supported devices: ");
         return text;
+    }
+
+    Status ColocationGraph::InitializeMemberWithAssignedDevice(
+            const string& assigned_device_name, const string& node_type,
+            Member* member) {
+        // This node has already been assigned to a device, so we
+        // respect this placement, after sanity-checking it.
+        // NOTE: Since any assignment must have been performed by
+        // the TensorFlow runtime, we consider errors in this branch to
+        // be INTERNAL.
+        TF_RETURN_IF_ERROR(member->SetAssignedDeviceName(assigned_device_name));
+
+        // Since assigned device must be a full specification, do extra checks.
+        const Device* assigned_device =
+            device_set_.FindDeviceByName(assigned_device_name);
+        if (assigned_device == nullptr) {
+            // TODO(b/129295848, b/122851476): Remove the bit about cross-host function
+            // calls when they are supported.
+            return errors::Internal(
+                    "Assigned device '", assigned_device_name,
+                    "' does not match any device. This error can happen when one attempts "
+                    "to run a tf.function with resource inputs residing on remote devices. "
+                    "This use case is currently not supported. Here are the devices "
+                    "available on this machine: [",
+                    absl::StrJoin(DevicesToString(device_set_.devices()), ", "), "].",
+                    "If you are seeing this error when running using a tf.Session, set "
+                    "experimental.share_cluster_devices_in_session to true in the "
+                    "tf.ConfigProto.");
+        }
+        for (const auto& d : member->supported_device_types()) {
+            if (DeviceType(assigned_device->attributes().device_type()) == d.first) {
+                return Status::OK();
+            }
+        }
+
+        return errors::Internal("Assigned device '", assigned_device_name,
+                "' does not have registered OpKernel support "
+                "for ",
+                node_type);
+    }
+
+    Status ColocationGraph::InitializeMembers() {
+        for (Node* node : graph_.op_nodes()) {
+            Status status = InitializeMember(*node, &members_[node->id()]);
+            if (!status.ok()) {
+                return AttachDef(status, *node);
+            }
+        }
+        return Status::OK();
+    }
+
+    Status ColocationGraph::InitializeMember(const Node& node, Member* member) {
+        TF_RETURN_IF_ERROR(member->SetParentAndSupportedDevices(
+                    node, device_types_, &local_address_spec_));
+        if (node.has_assigned_device_name()) {
+            TF_RETURN_IF_ERROR(InitializeMemberWithAssignedDevice(
+                        node.assigned_device_name(), node.type_string(), member));
+        } else {
+            // This node has not yet been assigned to a device, so we
+            // calculate any constraints due to the set of registered
+            // kernels and any (partial) user-provided device specification
+            // in the NodeDef.
+
+            // If no kernels are registered for this op type, fail with an error.
+            if (member->supported_device_types().empty()) {
+                std::set<string> registered_device_types;
+                for (Device* d : device_set_.devices()) {
+                    registered_device_types.insert(d->device_type());
+                }
+                return errors::InvalidArgument(
+                        "No OpKernel was registered to support Op '", node.type_string(),
+                        "' used by ", errors::FormatNodeNameForError(node.name()),
+                        "with these attrs: [", node.attrs().DebugString(),
+                        "]\n"
+                        "Registered devices: [",
+                        absl::StrJoin(registered_device_types, ", "), "]\n",
+                        "Registered kernels:\n", KernelsRegisteredForOp(node.type_string()));
+            }
+
+            // If the NodeDef contains a device, then we interpret it as a
+            // (partial) device specification.
+            if (!node.requested_device().empty()) {
+                // if (IsRefOrResourceGeneratorNode(node)) {
+                // Treat requested device on resource generating nodes as assigned
+                // device so that we don't override it.
+                // TF_RETURN_IF_ERROR(member->SetResourceDeviceName(node));
+                // } else {
+                // The user has specified a device in the NodeDef, try to find a
+                // valid device matching their specification in the set of
+                // devices.
+                // NOTE: The full name may specify a device that is not in
+                // n.supported_device_types(), but we check that in AssignDevice().
+                TF_RETURN_IF_ERROR(member->SetRequestedDeviceName(node));
+                // }
+            }
+        }
+        return Status::OK();
     }
 } // namespace dlxnet

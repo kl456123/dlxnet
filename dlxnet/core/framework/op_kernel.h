@@ -36,6 +36,7 @@
 #include "dlxnet/core/platform/thread_annotations.h"
 #include "dlxnet/core/platform/types.h"
 #include "dlxnet/core/protobuf/config.pb.h"
+#include "dlxnet/core/util/device_name_utils.h"
 
 
 namespace dlxnet{

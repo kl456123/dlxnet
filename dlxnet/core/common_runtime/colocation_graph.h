@@ -17,6 +17,10 @@ namespace dlxnet{
         public:
             Member() = default;
 
+            Status SetParentAndSupportedDevices(
+                    const Node& node, const std::vector<DeviceType>& types,
+                    const DeviceNameUtils::ParsedName* local_address_spec);
+
             const DeviceNameUtils::ParsedName& requested_device_name() const {
                 return requested_device_name_;
             }
@@ -40,6 +44,13 @@ namespace dlxnet{
 
 
 
+            // Returns the root node of the disjoint tree to which the node with the
+            // given id is connected.
+            // FindRoot should be called only for debugging or after the members have
+            // been updated with direct root pointers because it does not update
+            // root pointers and can traverse many links. It exists to have
+            // a const version of FindAndUpdateRoot
+            static int FindRoot(const std::vector<Member>& tree, int node_id);
             static int FindAndUpdateRoot(std::vector<Member>* tree, int node_id);
 
         private:
@@ -189,6 +200,25 @@ namespace dlxnet{
                     const Device* default_local_device);
 
         private:
+
+            // Returns the root node of the disjoint tree to which the node with the
+            // given id is connected.
+            // FindRoot should be called only for debugging or after the members have
+            // been updated with direct root pointers because it does not update
+            // root pointers and can traverse many links. It exists to have
+            // a const version of FindAndUpdateRoot
+            int FindRoot(int node_id) const {
+                return Member::FindRoot(members_, node_id);
+            }
+
+            Status InitializeMembers();
+
+            Status InitializeMemberWithAssignedDevice(const string& assigned_device_name,
+                    const string& node_type,
+                    Member* member);
+
+            Status InitializeMember(const Node& node, Member* member);
+
             const Graph& graph_;
             const FunctionStack stack_;
             const FunctionLibraryDefinition& flib_def_;

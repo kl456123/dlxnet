@@ -169,15 +169,17 @@ namespace dlxnet{
         Status s = errors::NotFound("No attr named '", attr_name, "' in NodeDef:");
         return s;
     }
-    string AttrSlice::DebugString()const{
-        std::vector<string> attr_value_list;
-        attr_value_list.reserve(attrs_->size());
-        for(const auto& it: *this){
-            attr_value_list.push_back(
-                    absl::StrCat(it.first, "=", SummarizeAttrValue(it.second)));
-        }
 
-        absl::StrJoin(attr_value_list, ",");
+    string AttrSlice::DebugString() const {
+        std::vector<string> attr_key_vals;
+        attr_key_vals.reserve(attrs_->size());
+        for (const auto& it : *this) {
+            const string& name = it.first;
+            const AttrValue& attr_value = it.second;
+            attr_key_vals.push_back(
+                    absl::StrCat(name, "=", SummarizeAttrValue(attr_value)));
+        }
+        return absl::StrJoin(attr_key_vals, ", ");
     }
 
     Status ValidateNodeDef(const NodeDef& node_def, const OpDef& op_def){

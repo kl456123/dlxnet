@@ -741,9 +741,45 @@ namespace dlxnet{
                         }
                     }
                     *reg = &iter->second;
+                }else{
+                    *was_attr_mismatch=true;
                 }
             }
-            // reg can be nullptr
+
+            // Check if no device specific registrations found. If not, try finding a
+            // default kernel.
+            if (*reg == nullptr) {
+                const string default_key = Key(node_op, DEVICE_DEFAULT, label);
+                auto regs = typed_registry->registry.equal_range(default_key);
+                for (auto iter = regs.first; iter != regs.second; ++iter) {
+                    // If there is a kernel registered for the op and device_type,
+                    // check that the attrs match.
+                    bool match;
+                    TF_RETURN_IF_ERROR(
+                            KernelAttrsMatch(iter->second.def, node_attrs, &match));
+                    if (match) {
+                        if (*reg != nullptr) {
+                            return errors::InvalidArgument(
+                                    "Multiple Default OpKernel registrations match NodeDef '",
+                                    // FormatNodeDefForError(node_name, has_experimental_debug_info,
+                                        // experimental_debug_info),
+                                    "': '", (*reg)->def.ShortDebugString(), "' and '",
+                                    iter->second.def.ShortDebugString(), "'");
+                        }
+                        *reg = &iter->second;
+                    } else {
+                        *was_attr_mismatch = true;
+                    }
+                }
+
+                if (*reg != nullptr) {
+                    VLOG(1) << "No device-specific kernels found for NodeDef '"
+                        // << FormatNodeDefForError(node_name, has_experimental_debug_info,
+                                // experimental_debug_info)
+                        << "'"
+                        << "Will fall back to a default kernel." << std::endl;
+                }
+            }
 
             return Status::OK();
         }
@@ -795,6 +831,45 @@ namespace dlxnet{
     KernelList GetRegisteredKernelsForOp(StringPiece op_name) {
         auto op_pred = [op_name](const KernelDef& k) { return k.op() == op_name; };
         return GetFilteredRegisteredKernels(op_pred);
+    }
+
+    Status SupportedDeviceTypesForNode(
+            const std::vector<DeviceType>& prioritized_types, const NodeDef& def,
+            PrioritizedDeviceTypeVector* prioritized_device_types,
+            const DeviceNameUtils::ParsedName* local_address_spec) {
+        // TODO(zhifengc): Changes the callers (SimplePlacer and
+        // DynamicPlacer) to consider the possibility that 'def' is call to
+        // a user-defined function and only calls this
+        // SupportedDeviceTypesForNode for primitive ops.
+        const OpRegistrationData* op_reg_data;
+        const Status s = OpRegistry::Global()->LookUp(def.op(), &op_reg_data);
+        if(s.ok()){
+            bool exists_attr_mismatch = false;
+            for (const DeviceType& device_type : prioritized_types) {
+                const KernelRegistration* reg = nullptr;
+                bool was_attr_mismatch = false;
+                TF_RETURN_IF_ERROR(
+                        FindKernelRegistration(device_type, def, &reg, &was_attr_mismatch));
+                exists_attr_mismatch = exists_attr_mismatch || was_attr_mismatch;
+                if (reg != nullptr) {
+                    int32 priority = reg->def.priority();
+                    prioritized_device_types->emplace_back(device_type, priority);
+                }
+            }
+
+            std::sort(prioritized_device_types->begin(),
+                    prioritized_device_types->end(),
+                    [](const std::pair<DeviceType, int32>& a,
+                        const std::pair<DeviceType, int32>& b) {
+                    return a.second > b.second;
+                    });
+        }else{
+            // Assumes that all device types support this node.
+            for (const DeviceType& device_type : prioritized_types) {
+                prioritized_device_types->push_back(std::make_pair(device_type, 0));
+            }
+        }
+        return Status::OK();
     }
 
     string KernelsRegisteredForOp(StringPiece op_name) {
