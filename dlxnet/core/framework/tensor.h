@@ -202,6 +202,14 @@ namespace dlxnet{
                     // only single dim
                     return shaped<T, 1>({NumElements()});
                 }
+            template <typename T>
+                typename TTypes<T>::ConstFlat flat() const {
+                    return shaped<T, 1>({NumElements()});
+                }
+
+            template <typename T, size_t NDIMS>
+                typename TTypes<T, NDIMS>::ConstTensor shaped(
+                        gtl::ArraySlice<int64> new_sizes) const;
 
             template<typename T, size_t NDIMS>
                 typename TTypes<T, NDIMS>::Tensor shaped(gtl::ArraySlice<int64> new_sizes);
@@ -210,12 +218,14 @@ namespace dlxnet{
         private:
             // check shape when view tensor(call flat<>() or tensor<>()) bit_casted capable
             template<typename T, size_t NDIMS>
-                void FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
-                        Eigen::array<Eigen::DenseIndex, NDIMS>* dims);
+                void FillDimsAndValidateCompatibleShape(
+                        gtl::ArraySlice<int64> new_sizes,
+                        Eigen::array<Eigen::DenseIndex, NDIMS>* dims)const;
 
             template<size_t NDIMS>
-                void FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
-                        Eigen::array<Eigen::DenseIndex, NDIMS>* dims);
+                void FillDimsAndValidateCompatibleShape(
+                        gtl::ArraySlice<int64> new_sizes,
+                        Eigen::array<Eigen::DenseIndex, NDIMS>* dims)const;
 
             void CheckType(DataType expected_dtype) const;
             void CheckTypeAndIsAligned(DataType expected_dtype) const;
@@ -259,9 +269,20 @@ namespace dlxnet{
             return typename TTypes<T, NDIMS>::Tensor(base<T>(), dims);
         }
 
+    template <typename T, size_t NDIMS>
+        typename TTypes<T, NDIMS>::ConstTensor Tensor::shaped(
+                gtl::ArraySlice<int64> new_sizes) const {
+            CheckType(DataTypeToEnum<T>::v());
+            CHECK(IsAligned());
+            Eigen::array<Eigen::DenseIndex, NDIMS> dims;
+            FillDimsAndValidateCompatibleShape(new_sizes, &dims);
+            return typename TTypes<T, NDIMS>::ConstTensor(base<T>(), dims);
+        }
+
     template<typename T, size_t NDIMS>
-        void Tensor::FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
-                Eigen::array<Eigen::DenseIndex, NDIMS>* dims){
+        void Tensor::FillDimsAndValidateCompatibleShape(
+                gtl::ArraySlice<int64> new_sizes,
+                Eigen::array<Eigen::DenseIndex, NDIMS>* dims)const{
             // check rank
             CHECK_EQ(NDIMS, new_sizes.size());
             int64 new_num_elements = 1;
@@ -276,8 +297,9 @@ namespace dlxnet{
         }
 
     template<size_t NDIMS>
-        void Tensor::FillDimsAndValidateCompatibleShape(gtl::ArraySlice<int64> new_sizes,
-                Eigen::array<Eigen::DenseIndex, NDIMS>* dims){
+        void Tensor::FillDimsAndValidateCompatibleShape(
+                gtl::ArraySlice<int64> new_sizes,
+                Eigen::array<Eigen::DenseIndex, NDIMS>* dims)const{
             // check rank
             CHECK_EQ(NDIMS, new_sizes.size());
             int64 new_num_elements = 1;

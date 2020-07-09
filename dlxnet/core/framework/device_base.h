@@ -13,6 +13,9 @@ namespace Eigen {
     struct SyclDevice;
 #endif
 }  // end namespace Eigen
+namespace stream_executor {
+    class Stream;
+}  // namespace stream_executor
 
 namespace dlxnet{
     class Device;
@@ -27,6 +30,7 @@ namespace dlxnet{
     class DeviceContext : public core::RefCounted {
         public:
             ~DeviceContext() override {}
+            virtual stream_executor::Stream* stream() const { return nullptr; }
             // "cpu_tensor" is a tensor on a CPU. Copies "cpu_tensor" into
             // "device_tensor" which is on a non-CPU device "device". "device_tensor"
             // must be allocated to be of the same size as "cpu_tensor".
