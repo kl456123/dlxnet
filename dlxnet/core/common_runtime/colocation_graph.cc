@@ -368,6 +368,7 @@ namespace dlxnet{
         // Cache the result of the possible devices for this node group.
         root_member.set_possible_devices(std::move(devices));
         *possible_devices = &root_member.possible_devices();
+        return Status::OK();
     }
 
     // Returns a list of devices having type in supported_device_types.  The

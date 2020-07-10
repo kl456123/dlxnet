@@ -32,6 +32,7 @@ limitations under the License.
 #include "dlxnet/core/lib/strings/str_util.h"
 #include "dlxnet/core/platform/protobuf.h"
 #include "dlxnet/core/lib/strings/proto_text_util.h"
+#include "dlxnet/core/framework/types.pb_text.h"
 
 namespace dlxnet {
 namespace {
@@ -237,8 +238,8 @@ string SummarizeAttrValue(const AttrValue& attr_value) {
       return strings::StrCat(attr_value.f());
     case AttrValue::kB:
       return attr_value.b() ? "true" : "false";
-    // case AttrValue::kType:
-      // return EnumName_DataType(attr_value.type());
+    case AttrValue::kType:
+      return EnumName_DataType(attr_value.type());
     // case AttrValue::kShape:
       // return PartialTensorShape::DebugString(attr_value.shape());
     case AttrValue::kTensor:
@@ -262,11 +263,11 @@ string SummarizeAttrValue(const AttrValue& attr_value) {
           pieces.push_back(attr_value.list().b(i) ? "true" : "false");
         }
       }
-      // else if (attr_value.list().type_size() > 0) {
-        // for (int i = 0; i < attr_value.list().type_size(); ++i) {
-          // pieces.push_back(EnumName_DataType(attr_value.list().type(i)));
-        // }
-      // }
+      else if (attr_value.list().type_size() > 0) {
+        for (int i = 0; i < attr_value.list().type_size(); ++i) {
+          pieces.push_back(EnumName_DataType(attr_value.list().type(i)));
+        }
+      }
       else if (attr_value.list().shape_size() > 0) {
         for (int i = 0; i < attr_value.list().shape_size(); ++i) {
           pieces.push_back(

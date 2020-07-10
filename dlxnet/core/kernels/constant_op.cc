@@ -55,6 +55,7 @@ namespace dlxnet {
     REGISTER_KERNEL(GPU, bool);
     REGISTER_KERNEL(GPU, int64);
     REGISTER_KERNEL(GPU, uint64);
+    REGISTER_KERNEL(GPU, int32);
     REGISTER_KERNEL(GPU, uint32);
 
 }  // namespace dlxnet
