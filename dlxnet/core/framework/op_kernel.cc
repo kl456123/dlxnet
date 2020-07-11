@@ -762,7 +762,7 @@ namespace dlxnet{
                             return errors::InvalidArgument(
                                     "Multiple Default OpKernel registrations match NodeDef '",
                                     // FormatNodeDefForError(node_name, has_experimental_debug_info,
-                                        // experimental_debug_info),
+                                    // experimental_debug_info),
                                     "': '", (*reg)->def.ShortDebugString(), "' and '",
                                     iter->second.def.ShortDebugString(), "'");
                         }
@@ -775,7 +775,7 @@ namespace dlxnet{
                 if (*reg != nullptr) {
                     VLOG(1) << "No device-specific kernels found for NodeDef '"
                         // << FormatNodeDefForError(node_name, has_experimental_debug_info,
-                                // experimental_debug_info)
+                        // experimental_debug_info)
                         << "'"
                         << "Will fall back to a default kernel." << std::endl;
                 }
@@ -1009,5 +1009,47 @@ namespace dlxnet{
             const char* correct_macro_name) {
         CHECK_EQ(nullptr, ctx->op_kernel().AsAsync())
             << "Use " << correct_macro_name << " in AsyncOpKernel implementations.";
+    }
+
+    // TODO(irving): Change const NodeDef& to const Node&
+    Status FindKernelDef(
+            const DeviceType& device_type, StringPiece node_name,
+            bool has_experimental_debug_info,
+            const NodeDef_ExperimentalDebugInfo& experimental_debug_info,
+            StringPiece node_op, StringPiece node_device, AttrSlice node_attrs,
+            const KernelDef** def, string* kernel_class_name) {
+        const KernelRegistration* reg = nullptr;
+        bool was_attr_mismatch;
+        TF_RETURN_IF_ERROR(FindKernelRegistration(
+                    device_type, node_name, has_experimental_debug_info,
+                    experimental_debug_info, node_op, node_attrs, &reg, &was_attr_mismatch));
+        if (reg == nullptr) {
+            Status s = errors::NotFound(
+                    "No registered '", node_op, "' OpKernel for ",
+                    DeviceTypeString(device_type), " devices compatible with node "
+                    // FormatNodeDefForError(node_name, has_experimental_debug_info,
+                        // experimental_debug_info)
+                    );
+            if (was_attr_mismatch) {
+                errors::AppendToMessage(
+                        &s, " (OpKernel was found, but attributes didn't match) ",
+                        "Requested Attributes: ",
+                        SummarizeAttrsHelper(node_attrs, node_device));
+            }
+            errors::AppendToMessage(&s,
+                    ".  Registered:", KernelsRegisteredForOp(node_op));
+            return s;
+        }
+        if (def != nullptr) *def = &reg->def;
+        if (kernel_class_name != nullptr) *kernel_class_name = reg->kernel_class_name;
+        return Status::OK();
+    }
+
+    Status FindKernelDef(const DeviceType& device_type, const NodeDef& node_def,
+            const KernelDef** def, string* kernel_class_name) {
+        return FindKernelDef(
+                device_type, node_def.name(), node_def.has_experimental_debug_info(),
+                node_def.experimental_debug_info(), node_def.op(), node_def.device(),
+                AttrSlice(&node_def.attr()), def, kernel_class_name);
     }
 }// namespace dlxnet

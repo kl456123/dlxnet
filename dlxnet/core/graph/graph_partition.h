@@ -12,6 +12,18 @@ namespace dlxnet{
         // Node.
         typedef std::function<string(const Node*)> NodeToLocFunc;
         NodeToLocFunc node_to_loc = nullptr;
+
+        // A function that returns a unique graph node name with the given
+        // prefix.
+        typedef std::function<string(const string&)> NewNameFunc;
+        NewNameFunc new_name = nullptr;
+
+        // A function that returns the incarnation of a device given the
+        // device's fullname. If not found, GetIncarnationFunc should return
+        // kIllegalIncarnation.
+        static const uint64 kIllegalIncarnation = 0;
+        typedef std::function<uint64(const string&)> GetIncarnationFunc;
+        GetIncarnationFunc get_incarnation = nullptr;
     };
     // Partition "input" graph into a set of graphs, one per location.
     // The location for node n is derived by calling opts.node_to_loc(n).

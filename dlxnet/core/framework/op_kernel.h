@@ -815,6 +815,23 @@ namespace dlxnet{
     // missing kernel errors.
     void LogAllRegisteredKernels();
 
+    // If node of node_name, experimental_debug_info, node_op, node_device and
+    // node_attrs has a corresponding kernel registered on device_type, returns OK
+    // and fill in the kernel def and kernel_class_name. <def> and
+    // <kernel_class_name> may be null.
+    Status FindKernelDef(
+            const DeviceType& device_type, StringPiece node_name,
+            bool has_experimental_debug_info,
+            const NodeDef_ExperimentalDebugInfo& experimental_debug_info,
+            StringPiece node_op, StringPiece node_device, AttrSlice node_attrs,
+            const KernelDef** def, string* kernel_class_name);
+
+    // If node_def has a corresponding kernel registered on device_type,
+    // returns OK and fill in the kernel def and kernel_class_name. <def> and
+    // <kernel_class_name> may be null.
+    Status FindKernelDef(const DeviceType& device_type, const NodeDef& node_def,
+            const KernelDef** def, string* kernel_class_name);
+
     // -----------------------------------------------------------------------------
     // OpKernel registration implementation follows, please ignore.
 

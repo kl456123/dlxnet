@@ -17,8 +17,29 @@ namespace dlxnet{
                     const Map& tensor2device,
                     const dlxnet::DeviceAttributes** out_device_attrs) {
                 *out_device_attrs = nullptr;
-
-                *out_device_attrs = &device_set.client_device()->attributes();
+                if (tensor2device.empty()) {
+                    *out_device_attrs = &device_set.client_device()->attributes();
+                    return Status::OK();
+                }
+                const auto it = tensor2device.find(tensor_name);
+                if (it == tensor2device.end()) {
+                    *out_device_attrs = &device_set.client_device()->attributes();
+                    return Status::OK();
+                }
+                DeviceNameUtils::ParsedName parsed_name;
+                if (!DeviceNameUtils::ParseFullName(it->second, &parsed_name)) {
+                    return errors::InvalidArgument("Invalid device name ('", it->second,
+                            "') provided for the tensor '", tensor_name,
+                            "' in CallableOptions");
+                }
+                Device* device = device_set.FindDeviceByName(
+                        DeviceNameUtils::ParsedNameToString(parsed_name));
+                if (device == nullptr) {
+                    return errors::InvalidArgument("Device '", it->second,
+                            "' specified for tensor '", tensor_name,
+                            "' in CallableOptions does not exist");
+                }
+                *out_device_attrs = &device->attributes();
                 return Status::OK();
             }
     }//namespace
@@ -65,13 +86,12 @@ namespace dlxnet{
                     OptimizationPassRegistry::PRE_PLACEMENT, optimization_options));
         // placement
         Placer placer(new_graph.get(), "", nullptr, device_set_,
-                  /* default_local_device= */ nullptr,
-                  session_options_ == nullptr ||
-                      session_options_->config.allow_soft_placement(),
-                  session_options_ != nullptr &&
-                      session_options_->config.log_device_placement());
-    // TODO(mrry): Consider making the Placer cancelable.
-    TF_RETURN_IF_ERROR(placer.Run());
+                /* default_local_device= */ nullptr,
+                session_options_ == nullptr ||
+                session_options_->config.allow_soft_placement(),
+                session_options_ != nullptr &&
+                session_options_->config.log_device_placement());
+        // TODO(mrry): Consider making the Placer cancelable.
         TF_RETURN_IF_ERROR(placer.Run());
         // post optimize
         TF_RETURN_IF_ERROR(OptimizationPassRegistry::Global()->RunGrouping(
@@ -128,7 +148,7 @@ namespace dlxnet{
 
     Status GraphExecutionState::PruneGraph(
             const BuildGraphOptions& options, Graph* graph,
-           subgraph::RewriteGraphMetadata* out_rewrite_metadata) {
+            subgraph::RewriteGraphMetadata* out_rewrite_metadata) {
         std::vector<std::unique_ptr<subgraph::PruneRewrite>> feed_rewrites;
         feed_rewrites.reserve(options.callable_options.feed_size());
         std::vector<std::unique_ptr<subgraph::PruneRewrite>> fetch_rewrites;

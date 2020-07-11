@@ -7,6 +7,7 @@
 #include "dlxnet/core/lib/core/stringpiece.h"
 #include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/lib/gtl/flatmap.h"
+#include "dlxnet/core/framework/attr_value_util.h"
 
 
 
@@ -31,6 +32,9 @@ namespace dlxnet{
     class AttrSlice{
         public:
             AttrSlice(const NodeDef& node_def);
+
+            AttrSlice();  // Empty
+            explicit AttrSlice(const AttrValueMap* a);
 
             // two versions function of find
             const AttrValue* Find(StringPiece attr_name)const;
@@ -113,6 +117,55 @@ namespace dlxnet{
             bool allow_multiple_formatted_node = false);
     Status AttachDef(const Status& status, const Node& node,
             bool allow_multiple_formatted_node = false);
+
+    // Look up the attr with name attr_name and return a reference to its value.
+    // If no attr with attr_name is found in node_def, or the attr does not have
+    // a matching type, a reference to an empty string is returned.
+    // REQUIRES: Must not use the returned value beyond the lifetime of node_def.
+    const string& GetNodeAttrString(const AttrSlice& attrs, StringPiece attr_name);
+
+    // This version avoids copying the TensorProto.
+    // REQUIRES: Must not use *value beyond the lifetime of node_def.
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            const TensorProto** value);  // type: "tensor"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            const TensorProto** value);  // type: "tensor"
+
+    // This version avoids copying the NameAttrList.
+    // REQUIRES: Must not use *value beyond the lifetime of node_def.
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            const NameAttrList** value);  // type: "func"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            const NameAttrList** value);  // type: "func"
+
+    // These versions copies the NameAttrList(s).
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            NameAttrList* value);  // type: "func"
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<NameAttrList>* value);  // type: "list(func)"
+
+    // Look up the attr with name attr_name and set *value to its value.  If no
+    // attr with attr_name is found in node_def, or the attr does not have
+    // a matching type, false is returned.
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            string* value);  // type: "string"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            int64* value);  // type: "int"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<int64>* value);  // type: "int"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            int32* value);  // type: "int"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            float* value);  // type: "float"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            bool* value);  // type: "bool"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            DataType* value);  // type: "type"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            TensorShape* value);  // type: "shape"
+
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<string>* value);  // type: "list(string)"
 }
 
 

@@ -139,6 +139,13 @@ namespace dlxnet{
     AttrSlice::AttrSlice(const NodeDef& node_def)
         :ndef_(&node_def), attrs_(&ndef_->attr()){}
 
+    AttrSlice::AttrSlice() : ndef_(nullptr) {
+        static const AttrValueMap* const kEmptyAttrValueMap = new AttrValueMap;
+        attrs_ = kEmptyAttrValueMap;
+    }
+
+    AttrSlice::AttrSlice(const AttrValueMap* a) : ndef_(nullptr), attrs_(a) {}
+
     const AttrValue* AttrSlice::Find(StringPiece attr_name) const {
         // Currently, the collection used for NodeDef::attr() (google::protobuf::Map)
         // requires that the keys used for lookups have type 'const string&'. Because
@@ -333,5 +340,115 @@ namespace dlxnet{
             bool allow_multiple_formatted_node) {
         return AttachDef(status, node.def(), allow_multiple_formatted_node);
     }
+
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            const TensorProto** value) {
+        const AttrValue* attr_value = attrs.Find(attr_name);
+        if (attr_value == nullptr) {
+            return false;
+        }
+        Status s = AttrValueHasType(*attr_value, "tensor");
+        if (!s.ok()) {
+            return false;
+        }
+        *value = &attr_value->tensor();
+        return true;
+    }
+
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<const TensorShapeProto*>* value) {
+        const AttrValue* attr_value = attrs.Find(attr_name);
+        if (attr_value == nullptr) {
+            return false;
+        }
+        Status s = AttrValueHasType(*attr_value, "list(shape)");
+        if (!s.ok()) {
+            return false;
+        }
+        value->reserve(attr_value->list().shape().size());
+        for (const auto& v : attr_value->list().shape()) {
+            value->push_back(&v);
+        }
+        return true;
+    }
+
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<const string*>* value) {
+        const AttrValue* attr_value = attrs.Find(attr_name);
+        if (attr_value == nullptr) {
+            return false;
+        }
+        Status s = AttrValueHasType(*attr_value, "list(string)");
+        if (!s.ok()) {
+            return false;
+        }
+        value->reserve(attr_value->list().s().size());
+        for (const auto& v : attr_value->list().s()) {
+            value->push_back(&v);
+        }
+        return true;
+    }
+
+    static const string& kEmptyString = *new string();
+
+    const string& GetNodeAttrString(const AttrSlice& attrs, StringPiece attr_name) {
+        const AttrValue* attr_value = attrs.Find(attr_name);
+        if (attr_value == nullptr) {
+            return kEmptyString;
+        }
+        Status s = AttrValueHasType(*attr_value, "string");
+        if (!s.ok()) {
+            return kEmptyString;
+        }
+        return attr_value->s();
+    }
+
+    #define DEFINE_TRY_GET_ATTR(TYPE, FIELD, ATTR_TYPE, APPEND_OP, CAST, ...) \
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,      \
+                        TYPE* value) {                                      \
+      const AttrValue* attr_value = attrs.Find(attr_name);                  \
+      if (attr_value == nullptr) {                                          \
+        return false;                                                       \
+      }                                                                     \
+      Status s = AttrValueHasType(*attr_value, ATTR_TYPE);                  \
+      if (!s.ok()) {                                                        \
+        return false;                                                       \
+      }                                                                     \
+      const auto& v = attr_value->FIELD();                                  \
+      __VA_ARGS__;                                                          \
+      *value = CAST;                                                        \
+      return true;                                                          \
+    }                                                                       \
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,      \
+                        std::vector<TYPE>* value) {                         \
+      const AttrValue* attr_value = attrs.Find(attr_name);                  \
+      if (attr_value == nullptr) {                                          \
+        return false;                                                       \
+      }                                                                     \
+      Status s = AttrValueHasType(*attr_value, "list(" ATTR_TYPE ")");      \
+        if (!s.ok()) {                                                        \
+        return false;                                                       \
+      }                                                                     \
+      value->reserve(attr_value->list().FIELD().size());                    \
+      for (const auto& v : attr_value->list().FIELD()) {                    \
+        __VA_ARGS__;                                                        \
+        value->APPEND_OP(CAST);                                             \
+      }                                                                     \
+      return true;                                                          \
+    }
+    DEFINE_TRY_GET_ATTR(int64, i, "int", emplace_back, v, ;)
+    DEFINE_TRY_GET_ATTR(
+      int32, i, "int", emplace_back, static_cast<int32>(v),
+      if (static_cast<int64>(static_cast<int32>(v)) != v) {
+        static int log_counter = 0;
+        if (log_counter < 10) {
+          log_counter++;
+          LOG(WARNING) << "Attr " << attr_name << " has value " << v
+                       << " out of range for an int32";
+        }
+        return false;
+      })
+    DEFINE_TRY_GET_ATTR(float, f, "float", emplace_back, v, ;)
+    DEFINE_TRY_GET_ATTR(bool, b, "bool", push_back, v, ;)
 
 }// namespace dlxnet

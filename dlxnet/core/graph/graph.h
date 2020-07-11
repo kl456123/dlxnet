@@ -111,6 +111,8 @@ namespace dlxnet{
             // Node type helpers.
             bool IsSource() const { return id() == 0; }
             bool IsSink() const { return id() == 1; }
+            // Anything other than the special Source & Sink nodes.
+            bool IsOp() const { return id() > 1; }
 
         private:
             // Called after an attr has changed. Decides whether we need to update some

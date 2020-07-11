@@ -249,6 +249,7 @@ namespace dlxnet{
     Status DirectSession::Create(const GraphDef& graph){
         return Create(GraphDef(graph));
     }
+
     Status DirectSession::Create(GraphDef&& graph){
         // lock and create when graph is not empty
         TF_RETURN_IF_ERROR(init_error_);
@@ -566,6 +567,17 @@ namespace dlxnet{
 
         // Partition the graph across devices.
         PartitionOptions popts;
+        popts.node_to_loc = [](const Node* node) {
+            return node->assigned_device_name();
+        };
+        popts.new_name = [this](const string& prefix) {
+            return strings::StrCat(prefix, "/_", edge_name_counter_.fetch_add(1));
+        };
+        popts.get_incarnation = [](const string& name) {
+            // The direct session does not have changing incarnation numbers.
+            // Just return '1'.
+            return 1;
+        };
         std::unordered_map<string, GraphDef> partitions;
         TF_RETURN_IF_ERROR(Partition(popts, &client_graph->graph, &partitions));
 
