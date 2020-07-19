@@ -4,19 +4,10 @@
 #include "dlxnet/core/framework/memory_types.h"
 #include "dlxnet/core/graph/graph_partition.h"
 #include "dlxnet/core/util/device_name_utils.h"
+#include "dlxnet/core/framework/node_def_builder.h"
 
 namespace dlxnet{
     namespace{
-        // Add an input to dst that comes from the "src_slot" output of the
-        // node named by "src_name".
-        void AddInput(NodeDef* dst, StringPiece src_name, int src_slot) {
-            if (src_slot == 0) {
-                dst->add_input(src_name.data(), src_name.size());
-            } else {
-                dst->add_input(strings::StrCat(src_name, ":", src_slot));
-            }
-        }
-
         // A map used to store memory types for the inputs/outputs of every node.
         // The key is a pair of ints consisting of a node id and input/output index.
         // TODO(power): migrate back to std::pair when absl::Hash is fixed for MSVC.
@@ -68,6 +59,29 @@ namespace dlxnet{
             }
             return false;
         }
+        // Return true iff (dst, dst_input) is specified on host memory.
+        bool IsDstInputOnHost(const Edge* edge, const GraphInfo& info) {
+            const Node* dst = edge->dst();
+            int dst_port = edge->dst_input();
+            if (info.device_types[dst->id()] != DEVICE_CPU) {
+                auto dst_it = info.input_types.find({dst->id(), dst_port});
+                DCHECK(dst_it != info.input_types.end());
+                return dst_it->second == HOST_MEMORY;
+            }
+            return true;
+        }
+
+        // Add an input to dst that comes from the "src_slot" output of the
+        // node named by "src_name".
+        void AddInput(NodeDef* dst, StringPiece src_name, int src_slot) {
+            if (src_slot == 0) {
+                dst->add_input(src_name.data(), src_name.size());
+            } else {
+                dst->add_input(strings::StrCat(src_name, ":", src_slot));
+            }
+        }
+
+
 
         // If 'ndef' is a Send or Recv, fills its attr send_device_incarnation
         // if possible.
@@ -135,6 +149,121 @@ namespace dlxnet{
             }
             return Status::OK();
         }
+
+        void SetSendRecvAttrs(const PartitionOptions& opts, const Edge* edge,
+                NodeDefBuilder* builder) {
+            builder->Attr("tensor_name",
+                    strings::StrCat("edge_", edge->id(), "_", edge->src()->name()));
+            builder->Attr("send_device", edge->src()->assigned_device_name());
+            builder->Attr("send_device_incarnation",
+                    static_cast<int64>(
+                        opts.get_incarnation(edge->src()->assigned_device_name())));
+            builder->Attr("recv_device", edge->dst()->assigned_device_name());
+            builder->Attr("client_terminated", false);
+        }
+
+        NodeDef* AddSend(const PartitionOptions& opts, const GraphInfo& g_info,
+                GraphDef* gdef, const Edge* edge,
+                NodeDefBuilder::NodeOut send_from, int64 start_time,
+                Status* status) {
+            const DataType dtype = send_from.data_type;
+            const DataType cast_dtype = opts.should_cast ? opts.should_cast(edge) : dtype;
+            const Node* src = edge->src();
+            const int src_port = edge->src_output();
+
+            // host_memory = true iff we need to use HostSend/HostCast.
+            bool host_memory = false;
+            auto src_it = g_info.output_types.find({src->id(), src_port});
+            DCHECK(src_it != g_info.output_types.end());
+            host_memory = (src_it->second == HOST_MEMORY);
+
+            // Add a cast node that casts dtype to cast_dtype.
+            // NOTE(yuanbyu): Only cast for cross-device send/recv.
+            if (dtype != cast_dtype && !NeedSameDeviceSendRecv(edge, g_info)) {
+                const string cast_op = (host_memory) ? "_HostCast" : "Cast";
+                NodeDefBuilder cast_builder(opts.new_name(src->name()), cast_op);
+                cast_builder.Device(src->assigned_device_name()).Input(send_from);
+                cast_builder.Attr("DstT", cast_dtype);
+
+                NodeDef* cast = gdef->add_node();
+                *status = cast_builder.Finalize(cast);
+                if (!status->ok()) return nullptr;
+
+                // Connect the Send op to the cast.
+                send_from.Reset(cast->name(), 0, cast_dtype);
+            }
+
+            // Add the send node.
+            const string send_op = (host_memory) ? "_HostSend" : "_Send";
+            NodeDefBuilder send_builder(opts.new_name(src->name()), send_op);
+            SetSendRecvAttrs(opts, edge, &send_builder);
+            send_builder.Device(src->assigned_device_name()).Input(send_from);
+            NodeDef* send = gdef->add_node();
+            *status = send_builder.Finalize(send);
+            return send;
+        }
+
+        NodeDef* AddRecv(const PartitionOptions& opts, const GraphInfo& g_info,
+                GraphDef* gdef, const Edge* edge, NodeDef** real_recv,
+                Status* status) {
+            const DataType dtype = EdgeType(edge);
+            const Node* src = edge->src();
+            const Node* dst = edge->dst();
+            const int dst_port = edge->dst_input();
+            DataType cast_dtype = dtype;
+
+            // NOTE(yuanbyu): Only cast for cross-device send/recv.
+            if (opts.should_cast && !NeedSameDeviceSendRecv(edge, g_info)) {
+                cast_dtype = opts.should_cast(edge);
+            }
+
+            // host_memory = true iff we need to use HostRecv/HostCast.
+            // Also log the introduction of the send-recv pair, for performance debugging.
+            bool host_memory = false;
+            auto dst_it = g_info.input_types.find({dst->id(), dst_port});
+            DCHECK(dst_it != g_info.input_types.end());
+            host_memory = (dst_it->second == HOST_MEMORY);
+            bool src_host_memory = false;
+            if (VLOG_IS_ON(1)) {
+                const int src_port = edge->src_output();
+                auto src_it = g_info.output_types.find({src->id(), src_port});
+                DCHECK(src_it != g_info.output_types.end());
+                src_host_memory = (src_it->second == HOST_MEMORY);
+            }
+            VLOG(1) << "Receiving data"
+                << " from " << src->name() << " (" << src->type_string() << ")"
+                << " on " << src->assigned_device_name() << " in "
+                << (src_host_memory ? "host memory" : "device memory") << " for "
+                << dst->name() << " (" << dst->type_string() << ")"
+                << " on " << dst->assigned_device_name() << " in "
+                << (host_memory ? "host memory" : "device memory");
+
+            // Add the recv node.
+            const string recv_op = (host_memory) ? "_HostRecv" : "_Recv";
+            NodeDefBuilder recv_builder(opts.new_name(src->name()), recv_op);
+            SetSendRecvAttrs(opts, edge, &recv_builder);
+            recv_builder.Device(dst->assigned_device_name())
+                .Attr("tensor_type", cast_dtype);
+            NodeDef* recv = gdef->add_node();
+            *status = recv_builder.Finalize(recv);
+            if (!status->ok()) return nullptr;
+            *real_recv = recv;
+
+            // Add the cast node (from cast_dtype to dtype) or an Identity node.
+            if (dtype != cast_dtype) {
+                const string cast_op = (host_memory) ? "_HostCast" : "Cast";
+                NodeDefBuilder cast_builder(opts.new_name(src->name()), cast_op);
+                cast_builder.Attr("DstT", dtype);
+                cast_builder.Device(dst->assigned_device_name())
+                    .Input(recv->name(), 0, cast_dtype);
+                NodeDef* cast = gdef->add_node();
+                *status = cast_builder.Finalize(cast);
+                if (!status->ok()) return nullptr;
+                return cast;
+            }else{
+                return recv;
+            }
+        }
     } // namespace
 
     Status Partition(const PartitionOptions& opts, Graph* g,
@@ -151,6 +280,8 @@ namespace dlxnet{
 
         string dstp;
         std::vector<const Edge*> inputs;
+        int32 num_data = 0;
+        int32 num_control = 0;
 
         // for each node, partition them according their placements
         for(const Node* dst : g->nodes()){
@@ -183,7 +314,7 @@ namespace dlxnet{
             // dst in Edge::dst_input() order.
             for (const Edge* edge : inputs) {
                 const Node* src = edge->src();
-                if (!src->IsOp()) continue;  // Skip Sink/Source nodes.
+                // if (!src->IsOp()) continue;  // Skip Sink/Source nodes.
 
                 GraphDef* src_graph = &(*partitions)[opts.node_to_loc(src)];
                 if (src_graph == dst_graph&&!NeedSameDeviceSendRecv(edge, g_info)) {
@@ -191,6 +322,25 @@ namespace dlxnet{
                     AddInput(dst_def, src->name(), edge->src_output());
                     continue;
                 }
+                int64 send_start_time = 0;
+                int64 recv_start_time = 0;
+
+                NodeDefBuilder::NodeOut send_from;
+                send_from.Reset(src->name(), edge->src_output(), EdgeType(edge));
+
+                // Need to split edge by placing matching send/recv nodes on
+                // the src/dst sides of the edge.
+                NodeDef* send = AddSend(opts, g_info, src_graph, edge, send_from,
+                        send_start_time, &status);
+                if (!status.ok()) return status;
+
+                NodeDef* real_recv = nullptr;
+                NodeDef* recv =
+                    AddRecv(opts, g_info, dst_graph, edge, &real_recv, &status);
+                if (!status.ok()) return status;
+
+                ++num_data;
+                AddInput(dst_def, recv->name(), 0);
             }
         }
 
@@ -206,8 +356,8 @@ namespace dlxnet{
             SetIncarnation(opts, gdef);
         }
 
-        // VLOG(1) << "Added send/recv: controls=" << num_control
-            // << ", data=" << num_data;
+        VLOG(1) << "Added send/recv: controls=" << num_control
+            << ", data=" << num_data;
         if (VLOG_IS_ON(2)) {
             for (auto& it : *partitions) {
                 GraphDef* gdef = &it.second;

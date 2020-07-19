@@ -205,6 +205,18 @@ namespace dlxnet{
         return out;
     }
 
+    bool DataTypeAlwaysOnHost(DataType dt) {
+        // Includes DT_STRING and DT_RESOURCE.
+        switch (dt) {
+            case DT_STRING:
+            case DT_STRING_REF:
+            case DT_RESOURCE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
 
 
 }

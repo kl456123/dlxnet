@@ -15,6 +15,7 @@ namespace dlxnet{
     class Node;
     class NodeDef;
     class OpDef;
+    class DeviceMgr;
     // manage node attrs
     class AttrSlice;
 
@@ -94,14 +95,58 @@ namespace dlxnet{
 
     // functions to Get Node Attrs
     // declarations for all types
-    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
-            int32* value);  // type: "int"
-    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
-            DataType* value);// type: "DataType"
-    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
-            const TensorProto** value);
-    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
-            bool* value);
+    // Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            // int32* value);  // type: "int"
+    // Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            // DataType* value);// type: "DataType"
+    // Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            // const TensorProto** value);
+    // Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            // bool* value);
+
+    // Look up the attr with name attr_name and set *value to its value.  If no
+  // attr with attr_name is found in node_def, or the attr does not have
+  // a matching type, a non-ok status will be returned.
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     string* value);  // type: "string"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     tstring* value);  // type: "tstring"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     int64* value);  // type: "int"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     int32* value);  // type: "int"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     float* value);  // type: "float"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     bool* value);  // type: "bool"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     DataType* value);  // type: "type"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     TensorShapeProto* value);  // type: "shape"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     TensorShape* value);  // type: "shape"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     Tensor* value);  // type: "tensor"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<string>* value);  // type "list(string)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<tstring>* value);  // type "list(tstring)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<int64>* value);  // type "list(int)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<int32>* value);  // type "list(int)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<float>* value);  // type "list(float)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<bool>* value);  // type "list(bool)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<DataType>* value);  // type "list(type)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     DataTypeVector* value);  // type "list(type)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<TensorShapeProto>* value);  // type "list(shape)"
+  Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+                     std::vector<TensorShape>* value);  // type "list(shape)"
 
     // Produces a formatted string pattern from the node which can uniquely identify
     // this node upstream to produce an informative error message. The pattern
@@ -166,6 +211,17 @@ namespace dlxnet{
 
     bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
             std::vector<string>* value);  // type: "list(string)"
+
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<int32>* value);  // type: "list(int)"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<float>* value);  // type: "list(float)"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<bool>* value);  // type: "list(bool)"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<DataType>* value);  // type: "list(type)"
+    bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,
+            std::vector<TensorShape> value);  // type: "shape"
 }
 
 

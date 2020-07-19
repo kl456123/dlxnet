@@ -1,8 +1,10 @@
 #ifndef DLXNET_CORE_GRAPH_GRAPH_PARTITION_H_
 #define DLXNET_CORE_GRAPH_GRAPH_PARTITION_H_
 #include <unordered_map>
+#include <functional>
 
 #include "dlxnet/core/framework/graph.pb.h"
+#include "dlxnet/core/framework/types.pb.h"
 #include "dlxnet/core/graph/graph.h"
 #include "dlxnet/core/lib/core/status.h"
 
@@ -24,6 +26,11 @@ namespace dlxnet{
         static const uint64 kIllegalIncarnation = 0;
         typedef std::function<uint64(const string&)> GetIncarnationFunc;
         GetIncarnationFunc get_incarnation = nullptr;
+
+        // A function that returns the data type into which the tensor
+        // should be cast before sent over the wire.
+        typedef std::function<DataType(const Edge*)> ShouldCastFunc;
+        ShouldCastFunc should_cast = nullptr;
     };
     // Partition "input" graph into a set of graphs, one per location.
     // The location for node n is derived by calling opts.node_to_loc(n).

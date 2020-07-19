@@ -23,9 +23,11 @@
 #include "dlxnet/core/framework/tensor_shape.h"
 #include "dlxnet/core/framework/tensor_shape.pb.h"  // TODO(b/62899350): Remove
 #include "dlxnet/core/framework/tracking_allocator.h"
+#include "dlxnet/core/framework/rendezvous.h"
 #include "dlxnet/core/framework/types.h"
 #include "dlxnet/core/framework/types.pb.h"
 #include "dlxnet/core/framework/function.h"
+#include "dlxnet/core/framework/control_flow.h"
 #include "dlxnet/core/lib/core/errors.h"
 #include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/lib/gtl/array_slice.h"
@@ -112,14 +114,32 @@ namespace dlxnet{
 
     };
 
-    class AsyncOpKernel:public OpKernel{
+    class AsyncOpKernel : public OpKernel {
         public:
+            using OpKernel::OpKernel;  // Lift OpKernel constructors.
+
+            // Asynchronous compute.
+            //
+            // Implementations of ComputeAsync() must ensure that `done` is (eventually)
+            // called exactly once to signal the completion of the computation. The
+            // implementation of ComputeAsync() must not block on the execution of another
+            // OpKernel. `done` may be called by the current thread, or by another thread.
+            // `context` is guaranteed to stay alive until the `done` callback starts.
+            //
+            // Since it is possible that the unblocking kernel may never run (due to an
+            // error or cancellation), in most cases the AsyncOpKernel should implement
+            // cancellation support via `context->cancellation_manager()`.
+            //
+            // WARNING: As soon as the `done` callback starts, `context` and `this` may be
+            // deleted. No code depending on these objects should execute after the call
+            // to `done`.
             typedef std::function<void()> DoneCallback;
             virtual void ComputeAsync(OpKernelContext* context, DoneCallback done) = 0;
-            void Compute(OpKernelContext* context) override;
 
             AsyncOpKernel* AsAsync() override { return this; }
             const AsyncOpKernel* AsAsync() const override { return this; }
+
+            void Compute(OpKernelContext* context) override;
     };
 
 
@@ -390,8 +410,17 @@ namespace dlxnet{
                 // The session state for this op.
                 SessionState* session_state = nullptr;
 
+                // Mechanism used by this op kernel invocation to communicate with
+                // computations running on other devices.
+                RendezvousInterface* rendezvous = nullptr;
+                const std::function<Status(const int64, const DeviceMgr*, Rendezvous** r)>*
+                    create_rendezvous;
+
                 // Unique session identifier. Can be empty.
                 string session_handle;
+
+                // Control-flow op supports.
+                FrameAndIter frame_iter;
 
                 // Inputs to this op kernel.
                 const gtl::InlinedVector<TensorValue, 4>* inputs = nullptr;
@@ -616,6 +645,16 @@ namespace dlxnet{
                 return params_->output_attr_array[index];
             }
 
+            // Communication.
+            //
+            // An op kernel communicates with outside environment through
+            // Rendezvous Send() and Recv().
+            RendezvousInterface* rendezvous() const { return params_->rendezvous; }
+            Status create_rendezvous(const int64 step_id, const DeviceMgr* device_mgr,
+                    Rendezvous** r) const {
+                return (*params_->create_rendezvous)(step_id, device_mgr, r);
+            }
+
             // An op kernel can access the session state it belongs to.
             SessionState* session_state() const { return params_->session_state; }
 
@@ -649,6 +688,8 @@ namespace dlxnet{
 
             // Other accessors.
 
+            // For control flow.
+            FrameAndIter frame_iter() const { return params_->frame_iter; }
             bool is_input_dead() const { return params_->is_input_dead; }
 
             // May be used, e.g., to get GPU handles, etc.

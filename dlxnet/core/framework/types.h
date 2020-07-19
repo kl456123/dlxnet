@@ -310,6 +310,11 @@ namespace dlxnet{
     // Returns a 0 on failure
     int DataTypeSize(DataType dt);
 
+    // Types that always sit on host: DT_STRING, DT_STRING_REF, DT_RESOURCE.
+    // For DT_RESOURCE, the handle always sits on host (even if the underlying
+    // object has device-allocated resources).
+    bool DataTypeAlwaysOnHost(DataType dt);
+
 }
 
 #endif

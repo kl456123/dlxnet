@@ -2,6 +2,19 @@
 
 
 namespace dlxnet{
+    NodeDefBuilder::NodeOut::NodeOut(StringPiece n, int i, DataType dt)
+        : node(n), index(i), data_type(dt) {}
+
+    NodeDefBuilder::NodeOut::NodeOut() {
+        // uninitialized, call Reset() before use.
+    }
+
+    void NodeDefBuilder::NodeOut::Reset(StringPiece n, int i, DataType dt) {
+        node = string(n);
+        index = i;
+        data_type = dt;
+    }
+
     NodeDefBuilder::NodeDefBuilder(StringPiece name, StringPiece op_name,
             const OpRegistryInterface* op_registry){
         node_def_.set_name(string(name));
@@ -13,6 +26,18 @@ namespace dlxnet{
             errors_.push_back(status.error_message());
         }
     }
+
+    NodeDefBuilder& NodeDefBuilder::Input(const NodeOut& src) {
+        Input(src.node, src.index, src.data_type);
+        return *this;
+    }
+
+    // For inputs that take a list of tensors.
+    // NodeDefBuilder& NodeDefBuilder::Input(gtl::ArraySlice<NodeOut> src_list) {
+        // const OpDef::ArgDef* arg = NextArgDef();
+        // if (arg != nullptr) ListInput(arg, src_list);
+        // return *this;
+    // }
 
     void NodeDefBuilder::Initialize(){
         inputs_specified_=0;
@@ -97,7 +122,7 @@ namespace dlxnet{
         }
     }
 
-    Status NodeDefBuilder::Finalize(NodeDef* node_def){
+    Status NodeDefBuilder::Finalize(NodeDef* node_def, bool consume){
         const std::vector<string>* errors_ptr = &errors_;
         if(op_def_!=nullptr && inputs_specified_<op_def_->input_arg_size()){
             // no enough inputs specified
@@ -125,7 +150,13 @@ namespace dlxnet{
             }
         }else{
             // no error
-            *node_def = node_def_;
+            NodeDef node_def_backup;
+            if (node_def == nullptr) node_def = &node_def_backup;
+            if(consume){
+                *node_def = std::move(node_def_);
+            }else{
+                *node_def = node_def_;
+            }
             // add default value
             AddDefaultsToNodeDef(*op_def_, node_def);
             return Status::OK();

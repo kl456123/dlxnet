@@ -403,6 +403,32 @@ namespace dlxnet{
         return attr_value->s();
     }
 
+      // The ... is to allow the caller to inject some value validation code.  Use
+  // just ; if no additional validation code is needed.
+  #define DEFINE_GET_ATTR(TYPE, FIELD, ATTR_TYPE, APPEND_OP, CAST, ...)         \
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,           \
+                       TYPE* value) {                                           \
+      const AttrValue* attr_value;                                              \
+      TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));                   \
+      TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, ATTR_TYPE));             \
+      const auto& v = attr_value->FIELD();                                      \
+      __VA_ARGS__;                                                              \
+      *value = CAST;                                                            \
+      return Status::OK();                                                      \
+    }                                                                           \
+    Status GetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,           \
+                       std::vector<TYPE>* value) {                              \
+      const AttrValue* attr_value;                                              \
+      TF_RETURN_IF_ERROR(attrs.Find(attr_name, &attr_value));                   \
+      TF_RETURN_IF_ERROR(AttrValueHasType(*attr_value, "list(" ATTR_TYPE ")")); \
+      value->reserve(attr_value->list().FIELD().size());                        \
+      for (const auto& v : attr_value->list().FIELD()) {                        \
+        __VA_ARGS__;                                                            \
+        value->APPEND_OP(CAST);                                                 \
+      }                                                                         \
+      return Status::OK();                                                      \
+    }
+
     #define DEFINE_TRY_GET_ATTR(TYPE, FIELD, ATTR_TYPE, APPEND_OP, CAST, ...) \
     bool TryGetNodeAttr(const AttrSlice& attrs, StringPiece attr_name,      \
                         TYPE* value) {                                      \
@@ -436,6 +462,7 @@ namespace dlxnet{
       }                                                                     \
       return true;                                                          \
     }
+    DEFINE_GET_ATTR(int64, i, "int", emplace_back, v, ;)
     DEFINE_TRY_GET_ATTR(int64, i, "int", emplace_back, v, ;)
     DEFINE_TRY_GET_ATTR(
       int32, i, "int", emplace_back, static_cast<int32>(v),
@@ -450,5 +477,7 @@ namespace dlxnet{
       })
     DEFINE_TRY_GET_ATTR(float, f, "float", emplace_back, v, ;)
     DEFINE_TRY_GET_ATTR(bool, b, "bool", push_back, v, ;)
+
+    DEFINE_GET_ATTR(string, s, "string", emplace_back, v, ;)
 
 }// namespace dlxnet

@@ -14,6 +14,21 @@ namespace dlxnet{
 
     class NodeDefBuilder{
         public:
+            // To specify an output to be consumed by one of the Input() methods below.
+            struct NodeOut {
+                NodeOut(StringPiece n, int i, DataType dt);
+                NodeOut();  // uninitialized, call Reset() before use.
+                void Reset(StringPiece n, int i, DataType dt);
+                string node;
+                int index;
+                DataType data_type;
+            };
+
+            NodeDefBuilder& Input(const NodeOut& src);
+
+            // For inputs that take a list of tensors.
+            NodeDefBuilder& Input(gtl::ArraySlice<NodeOut> src_list);
+
             NodeDefBuilder(StringPiece name, StringPiece op_name,
                     const OpRegistryInterface* op_reistry=OpRegistry::Global());
             NodeDefBuilder(StringPiece name, const OpDef* op_def);
@@ -36,7 +51,7 @@ namespace dlxnet{
             NodeDefBuilder& Attr(StringPiece name, const Tensor& value);
             NodeDefBuilder& Attr(StringPiece name, const TensorProto& value);
 
-            Status Finalize(NodeDef* node_def);
+            Status Finalize(NodeDef* node_def, bool consume=false);
 
             const string& node_name()const {return node_def_.name();}
             const OpDef& op_def()const{return *op_def_;}
