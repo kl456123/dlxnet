@@ -116,6 +116,32 @@ namespace dlxnet{
                 return !eigen_cpu_devices_.empty();
             }
 
+            // "stream" is used in special circumstances (such as the
+            // constructors of Ops) where there is no available OpKernelContext.
+            // "default_context" is used by OpKernelContext whenever a device does not
+            // supply a DeviceContext for an op in TryGetDeviceContext() (e.g. when only
+            // using a single stream.)
+            // "event_mgr" is used to delay deallocation of temporary GPU buffers.
+            // TODO(pbar) Work out how to move this out of DeviceBase.
+            // GpuDeviceInfo name is an unfortunate legacy, it is used not only by GPUs
+            // but also by TPU devices (to provide default device context).
+            struct DeviceInfo {
+                // Make sure all the defaults are NULL, so we can spot missing assignments.
+                stream_executor::Stream* stream = nullptr;
+                DeviceContext* default_context = nullptr;
+                // EventMgr* event_mgr = nullptr;
+                int gpu_id = -1;
+            };
+
+            // Does not take ownership.
+            void set_device_info(DeviceInfo* g) {
+                device_info_ = g;
+            }
+
+            virtual const DeviceInfo* device_info() const {
+                return device_info_;
+            }
+
             const thread::ThreadPool* eigen_cpu_thread_pool()const{
                 CHECK(cpu_thread_pool_!=nullptr);
                 return cpu_thread_pool_;
@@ -131,6 +157,8 @@ namespace dlxnet{
             thread::ThreadPool* device_thread_pool_ = nullptr;
             thread::ThreadPool* cpu_thread_pool_ = nullptr;
             std::vector<Eigen::ThreadPoolDevice*> eigen_cpu_devices_;
+            // Set by GPUs as well as by TPU devices.
+            DeviceInfo* device_info_ = nullptr;
     };
 }// namespace dlxnet
 

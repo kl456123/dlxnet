@@ -2,17 +2,91 @@
 #include "dlxnet/core/common_runtime/gpu/gpu_id_manager.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_id_utils.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_util.h"
-#include "dlxnet/core/platform/stream_executor.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_process_state.h"
 #include "dlxnet/core/platform/types.h"
 #include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/lib/strings/str_util.h"
 #include "dlxnet/core/lib/core/notification.h"
+#include "dlxnet/core/util/env_var.h"
 #include "dlxnet/core/platform/logging.h"
 
 
 
 namespace dlxnet{
+
+    // This factory helps to ensure that different GPU device objects that refer to
+    // the same physical device and stream group id use the same stream group
+    // object (and therefore the same CUDA streams). This is necessary since there
+    // is a single memory allocator per device (see ProcessState::GetGPUAllocator)
+    // and allocators must not be shared across streams.
+    class BaseGPUDevice::StreamGroupFactory {
+        public:
+            // Returns the unique stream group for use with the stream defined by
+            // {tf_gpu_id, stream_group_within_gpu}, creating it if it does not yet
+            // exist.
+            // This function is thread safe.
+            BaseGPUDevice::StreamGroup* GetOrCreate(TfGpuId tf_gpu_id,
+                    int stream_group_within_gpu,
+                    se::StreamExecutor* executor,
+                    const GPUOptions& options) {
+                mutex_lock guard(lock_);
+                StreamGroup* group =
+                    &streams_[key_type(tf_gpu_id, stream_group_within_gpu)];
+                if(!group->compute){
+                    group->compute = new se::Stream(executor);
+                    group->compute->Init();
+                    VLOG(2) << "Created stream[" << stream_group_within_gpu
+                        << "] = " << group->compute;
+
+                    group->host_to_device = new se::Stream(executor);
+                    group->host_to_device->Init();
+                    VLOG(2) << "Created host_to_device_stream[" << stream_group_within_gpu
+                        << "] = " << group->host_to_device;
+
+                    group->device_to_host = new se::Stream(executor);
+                    group->device_to_host->Init();
+                    VLOG(2) << "Created device_to_host_stream[" << stream_group_within_gpu
+                        << "] = " << group->device_to_host;
+
+                    int num_d2d_streams =
+                        options.experimental().num_dev_to_dev_copy_streams();
+                    if (num_d2d_streams == 0) num_d2d_streams = 1;
+                    if (num_d2d_streams < 1 || num_d2d_streams > 4) {
+                        LOG(ERROR)
+                            << "Illegal GPUOptions.experimental.num_dev_to_dev_copy_streams="
+                            << num_d2d_streams << " set to 1 instead.";
+                        num_d2d_streams = 1;
+                    }
+
+                    for (int i = 0; i < num_d2d_streams; ++i) {
+                        se::Stream* stream = new se::Stream(executor);
+                        stream->Init();
+                        group->device_to_device.push_back(stream);
+                        VLOG(2) << "Created device_to_device_stream[" << stream_group_within_gpu
+                            << "] = " << group->device_to_device.back();
+                    }
+                }
+                return group;
+            }
+
+            // Returns a reference to the StreamGroupFactory singleton. Note that this is
+            // never destroyed, so the objects it owns are never deleted.
+            static StreamGroupFactory& Global() {
+                static StreamGroupFactory* instance = new StreamGroupFactory();
+                return *instance;
+            }
+
+        private:
+            mutex lock_;
+            using key_type = std::tuple<int, int>;
+            std::map<key_type, StreamGroup> streams_;
+
+            // StreamGroupFactory cannot be created directly; Call
+            // StreamGroupFactory::Global() to get the global instance.
+            StreamGroupFactory() = default;
+            TF_DISALLOW_COPY_AND_ASSIGN(StreamGroupFactory);
+    };
+
     BaseGPUDevice::BaseGPUDevice(const SessionOptions& options, const string& name,
             Bytes memory_limit, const DeviceLocality& locality,
             TfGpuId tf_gpu_id,
@@ -43,13 +117,68 @@ namespace dlxnet{
     }
 
     Status BaseGPUDevice::Init(const SessionOptions& options) {
-        device_context_ = new GPUDeviceContext(0);
+        auto executor_status = GpuIdUtil::ExecutorForTfGpuId(tf_gpu_id_);
+        if (!executor_status.status().ok()) {
+            return errors::Internal("Failed to get StreamExecutor for device ",
+                    tf_gpu_id_);
+        }
+
+        executor_ = executor_status.ValueOrDie();
+
+        stream_ = StreamGroupFactory::Global().GetOrCreate(
+                tf_gpu_id_, 0, executor_, options.config.gpu_options());
+
+        device_context_ =
+            new GPUDeviceContext(0, stream_->compute,
+                    stream_->host_to_device, stream_->device_to_host,
+                    stream_->device_to_device);
         timestamped_allocator_ =
             options.config.gpu_options().experimental().timestamped_allocator();
 
+        device_info_ = new DeviceInfo;
+        device_info_->stream = stream_->compute;
+        device_info_->default_context = device_context_;
+        // device_info_->event_mgr = em_;
         PlatformGpuId platform_gpu_id;
         TF_RETURN_IF_ERROR(
                 GpuIdManager::TfToPlatformGpuId(tf_gpu_id_, &platform_gpu_id));
+        device_info_->gpu_id = platform_gpu_id;
+        set_device_info(device_info_);
+
+        // Whether and how the GPU device uses its own threadpool.
+        // This option is experimental. Once we confirm the best setting, we
+        // may change the default behavior and completely remove this flag.
+        // Default values might change in future releases.
+        // Possible values:
+        //   * global: GPU uses threads shared with CPU in the main compute
+        //          thread-pool. This is currently the default.
+        //   * gpu_private: GPU uses threads dedicated to this device.
+        //   * gpu_shared: All GPUs share a dedicated thread pool.
+        string gpu_thread_mode;
+        TF_RETURN_IF_ERROR(
+                ReadStringFromEnvVar("TF_GPU_THREAD_MODE", "global", &gpu_thread_mode));
+        gpu_thread_mode = absl::AsciiStrToLower(gpu_thread_mode);
+        if (gpu_thread_mode != "global") {
+            int64 gpu_thread_count = -1;
+            // Default to two threads. One for device compute and another for memory
+            // copies.
+            TF_RETURN_IF_ERROR(
+                    ReadInt64FromEnvVar("TF_GPU_THREAD_COUNT", 2, &gpu_thread_count));
+            if (gpu_thread_mode == "gpu_private") {
+                // TODO(zhengxq): since these threads only serve a single GPU device,
+                //   we should set the device context once for each thread, and avoid
+                //   setting them for each kernel.
+                // TODO(zhengxq): pin the thread to the same socket of the target GPU.
+                thread_pool_.reset(new thread::ThreadPool(
+                            options.env, ThreadOptions(),
+                            strings::StrCat("gpu_private_", tf_gpu_id_),
+                            static_cast<int32>(gpu_thread_count),
+                            !options.config.experimental().disable_thread_spinning(),
+                            /*allocator=*/nullptr));
+            }else if (gpu_thread_mode == "gpu_shared") {
+            }else{
+            }
+        }
 
         return Status::OK();
     }
@@ -177,6 +306,8 @@ namespace dlxnet{
             return status;
         }
     }
+
+
 
     Status BaseGPUDeviceFactory::ListPhysicalDevices(std::vector<string>* devices) {
 

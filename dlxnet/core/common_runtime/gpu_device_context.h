@@ -11,8 +11,17 @@ namespace stream_executor {
 namespace dlxnet{
     class GPUDeviceContext : public DeviceContext {
         public:
-            GPUDeviceContext(int stream_id)
-                :stream_id_(stream_id){}
+            // Does not take ownership of streams.
+            GPUDeviceContext(int stream_id, se::Stream* stream,
+                    se::Stream* host_to_device_stream,
+                    se::Stream* device_to_host_stream,
+                    gtl::InlinedVector<se::Stream*, 4> device_to_device_stream)
+                : stream_id_(stream_id),
+                stream_(stream),
+                host_to_device_stream_(host_to_device_stream),
+                device_to_host_stream_(device_to_host_stream),
+                device_to_device_stream_(device_to_device_stream) {
+                }
             ~GPUDeviceContext() override {}
 
             se::Stream* stream() const override { return stream_; }

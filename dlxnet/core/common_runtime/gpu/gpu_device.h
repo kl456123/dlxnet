@@ -7,6 +7,7 @@
 #include "dlxnet/core/common_runtime/gpu/gpu_id.h"
 #include "dlxnet/core/common_runtime/gpu_device_context.h"
 #include "dlxnet/core/common_runtime/gpu/gpu_id_manager.h"
+#include "dlxnet/core/platform/stream_executor.h"
 
 namespace dlxnet{
     class BaseGPUDevice: public LocalDevice{
@@ -48,9 +49,21 @@ namespace dlxnet{
             Allocator* gpu_allocator_;  // not owned
             Allocator* cpu_allocator_;  // not owned
 
-            // se::StreamExecutor* executor_;  // not owned
+            se::StreamExecutor* executor_;  // not owned
+
         private:
+            struct StreamGroup {
+                se::Stream* compute = nullptr;
+                se::Stream* host_to_device = nullptr;
+                se::Stream* device_to_host = nullptr;
+                gtl::InlinedVector<se::Stream*, 4> device_to_device;
+            };
+            class StreamGroupFactory;
+
+            StreamGroup* stream_;
             GPUDeviceContext* device_context_;
+            DeviceInfo* device_info_ = nullptr;
+            std::unique_ptr<thread::ThreadPool> thread_pool_;
             TfGpuId tf_gpu_id_;
             const bool sync_every_op_ = false;
             bool timestamped_allocator_ = false;

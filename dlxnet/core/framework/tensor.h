@@ -237,9 +237,14 @@ namespace dlxnet{
             }
             TensorShape shape_;
             TensorBuffer* buf_;
+
+            friend class DMAHelper;             // For access to buf_.
+
             // use shaped instead of base to get internal data
             template <typename T>
                 T* base() const;
+
+            bool CanUseDMA() const;
     };
 
     template <typename T>
