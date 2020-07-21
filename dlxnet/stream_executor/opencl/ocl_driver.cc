@@ -256,4 +256,22 @@ namespace stream_executor{
         stream.enqueueCopyBuffer(cl::Buffer(gpu_src_ptr), cl::Buffer(gpu_dst_ptr), 0, 0, size);
         return Status::OK();
     }
+
+    /*static*/ bool OCLDriver::AsynchronousMemcpyD2H(GpuContext context, void* host_dst,
+            GpuDevicePtr gpu_src, uint64 size,
+            GpuStreamHandle stream){
+        return true;
+    }
+
+    /*static*/ bool OCLDriver::AsynchronousMemcpyH2D(GpuContext context, GpuDevicePtr gpu_dst,
+            const void* host_src, uint64 size,
+            GpuStreamHandle stream){
+        return true;
+    }
+
+    /*static*/ bool OCLDriver::AsynchronousMemcpyD2D(GpuContext context, GpuDevicePtr gpu_dst,
+            GpuDevicePtr gpu_src, uint64 size,
+            GpuStreamHandle stream){
+        return true;
+    }
 }//namespace stream_executor

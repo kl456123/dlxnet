@@ -278,6 +278,23 @@ namespace stream_executor{
             // Without blocking the device, retrieve the current stream status.
             port::Status GetStatus(Stream *stream);
 
+            // Entrains a memcpy operation onto stream, with a host destination location
+            // host_dst and a device memory source, with target size size.
+            bool Memcpy(Stream *stream, void *host_dst,
+                    const DeviceMemoryBase &device_src, uint64 size);
+
+            // Entrains a memcpy operation onto stream, with a device destination location
+            // and a host memory source, with target size size.
+            bool Memcpy(Stream *stream, DeviceMemoryBase *device_dst,
+                    const void *host_src, uint64 size);
+
+            // Entrains a memcpy operation onto stream, with a device destination location
+            // and a device source location, with target size size. Peer access should
+            // have been enabled between the StreamExecutors owning the device memory
+            // regions.
+            bool MemcpyDeviceToDevice(Stream *stream, DeviceMemoryBase *device_dst,
+                    const DeviceMemoryBase &device_src, uint64 size);
+
             // Reader/writer lock for class-static StreamExecutor members.
             static absl::Mutex static_mu_;
 

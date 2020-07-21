@@ -50,6 +50,8 @@ namespace stream_executor{
                     GpuFunctionHandle kernel, cl::NDRange gws, cl::NDRange lws,
                     GpuStreamHandle stream);
 
+            // -- Synchronous memcopies.
+
             static port::Status SynchronousMemcpyD2H(GpuContext context, void* host_dst,
                     GpuDevicePtr gpu_src, uint64 size);
             static port::Status SynchronousMemcpyH2D(GpuContext context,
@@ -58,6 +60,18 @@ namespace stream_executor{
             static port::Status SynchronousMemcpyD2D(GpuContext context,
                     GpuDevicePtr gpu_dst,
                     GpuDevicePtr gpu_src, uint64 size);
+
+            // -- Asynchronous memcopies.
+
+            static bool AsynchronousMemcpyD2H(GpuContext context, void* host_dst,
+                    GpuDevicePtr gpu_src, uint64 size,
+                    GpuStreamHandle stream);
+            static bool AsynchronousMemcpyH2D(GpuContext context, GpuDevicePtr gpu_dst,
+                    const void* host_src, uint64 size,
+                    GpuStreamHandle stream);
+            static bool AsynchronousMemcpyD2D(GpuContext context, GpuDevicePtr gpu_dst,
+                    GpuDevicePtr gpu_src, uint64 size,
+                    GpuStreamHandle stream);
 
             static int GetDeviceCount();
 

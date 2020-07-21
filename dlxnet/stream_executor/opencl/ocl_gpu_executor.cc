@@ -197,6 +197,29 @@ namespace stream_executor{
                 AsOCLDevicePtr(gpu_src), size);
     }
 
+    bool OCLExecutor::Memcpy(Stream* stream, void* host_dst,
+            const DeviceMemoryBase& gpu_src, uint64 size) {
+        return OCLDriver::AsynchronousMemcpyD2H(context_, host_dst,
+                AsOCLDevicePtr(gpu_src), size,
+                AsGpuStreamValue(stream));
+    }
+
+    bool OCLExecutor::Memcpy(Stream* stream, DeviceMemoryBase* gpu_dst,
+            const void* host_src, uint64 size) {
+        return OCLDriver::AsynchronousMemcpyH2D(context_, AsOCLDevicePtr(gpu_dst),
+                host_src, size,
+                AsGpuStreamValue(stream));
+    }
+
+    bool OCLExecutor::MemcpyDeviceToDevice(Stream* stream,
+            DeviceMemoryBase* gpu_dst,
+            const DeviceMemoryBase& gpu_src,
+            uint64 size) {
+        return OCLDriver::AsynchronousMemcpyD2D(context_, AsOCLDevicePtr(gpu_dst),
+                AsOCLDevicePtr(gpu_src), size,
+                AsGpuStreamValue(stream));
+    }
+
     port::Status OCLExecutor::Launch(Stream *stream, const ThreadDim &thread_dims,
             const BlockDim &block_dims, const KernelBase &kernel,
             const KernelArgsArrayBase &args){

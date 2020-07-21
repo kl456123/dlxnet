@@ -72,8 +72,8 @@ namespace dlxnet{
             return errors::Internal("Failed to find dest device GPUDeviceInfo");
         }
         // if (!dev_info->stream->parent()->SynchronizeAllActivity() ||
-                // !dev_info->stream->ok()) {
-            // return errors::Internal("GPU sync failed");
+        // !dev_info->stream->ok()) {
+        // return errors::Internal("GPU sync failed");
         // }
         return Status::OK();
     }
@@ -110,14 +110,17 @@ namespace dlxnet{
             return;
         }
         // Wait for the sender's main stream to make sure the data are available.
-        // send_device_to_host_stream->ThenWaitFor(send_stream);
+        send_device_to_host_stream->ThenWaitFor(send_stream);
 
         const int64 total_bytes = gpu_tensor->TotalBytes();
         if (total_bytes > 0) {
             void* src_ptr = GetBase(gpu_tensor);
             DeviceMemoryBase gpu_src_ptr(src_ptr, total_bytes);
             void* dst_ptr = GetBase(cpu_tensor);
-            // send_device_to_host_stream->ThenMemcpy(dst_ptr, gpu_src_ptr, total_bytes);
+            send_device_to_host_stream->ThenMemcpy(dst_ptr, gpu_src_ptr, total_bytes);
+        }
+        if (!send_device_to_host_stream->ok()) {
+            LOG(FATAL) << "GPU->CPU Memcpy failed";
         }
         done(Status::OK());
     }
@@ -128,5 +131,40 @@ namespace dlxnet{
             Device* gpu_device, Tensor* gpu_tensor,
             StatusCallback done, bool sync_dst_compute) {
         VLOG(1) << "CopyCPUTensorToGPU";
+
+        const DeviceBase::DeviceInfo* dev_info = nullptr;
+        se::Stream* recv_stream = nullptr;
+        Status s = PrepareCopy(gpu_device, device_context, *cpu_tensor, gpu_tensor,
+                &dev_info, &recv_stream);
+        if (!s.ok()) {
+            done(s);
+            return;
+        }
+
+        auto recv_host_to_device_stream =
+            static_cast<const GPUDeviceContext*>(device_context)
+            ->host_to_device_stream();
+        if (recv_host_to_device_stream == nullptr) {
+            done(errors::Internal("No send gpu copy-out-stream is available."));
+            return;
+        }
+        // Wait for the recv-stream to make sure the buffer is truly available.
+        if (sync_dst_compute) {
+            recv_host_to_device_stream->ThenWaitFor(recv_stream);
+        }
+
+        const int64 total_bytes = cpu_tensor->TotalBytes();
+        // Note that 0-size tensors have no backing buffer.
+        if (total_bytes > 0) {
+            void* src_ptr = GetBase(cpu_tensor);
+            void* dst_ptr = GetBase(gpu_tensor);
+            DeviceMemoryBase gpu_dst_ptr(dst_ptr, total_bytes);
+            recv_host_to_device_stream->ThenMemcpy(&gpu_dst_ptr, src_ptr, total_bytes);
+        }
+
+        if (!recv_host_to_device_stream->ok()) {
+            LOG(FATAL) << "CPU->GPU Memcpy failed";
+        }
+        done(Status::OK());
     }
 }// namespace dlxnet

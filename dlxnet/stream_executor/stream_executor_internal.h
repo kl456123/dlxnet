@@ -146,6 +146,14 @@ namespace stream_executor{
                         DeviceMemoryBase *gpu_dst, const DeviceMemoryBase &gpu_src,
                         uint64 size) = 0;
 
+                virtual bool Memcpy(Stream *stream, void *host_dst,
+                        const DeviceMemoryBase &gpu_src, uint64 size) = 0;
+                virtual bool Memcpy(Stream *stream, DeviceMemoryBase *gpu_dst,
+                        const void *host_src, uint64 size) = 0;
+                virtual bool MemcpyDeviceToDevice(Stream *stream, DeviceMemoryBase *gpu_dst,
+                        const DeviceMemoryBase &gpu_src,
+                        uint64 size) = 0;
+
                 virtual port::Status AllocateEvent(Event *event) = 0;
                 virtual port::Status DeallocateEvent(Event *event) = 0;
                 virtual port::Status RecordEvent(Stream *stream, Event *event) = 0;

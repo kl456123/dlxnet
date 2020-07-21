@@ -322,6 +322,24 @@ namespace stream_executor{
         return status.ok();
     }
 
+    bool StreamExecutor::Memcpy(Stream *stream, void *host_dst,
+            const DeviceMemoryBase &device_src, uint64 size) {
+        return implementation_->Memcpy(stream, host_dst, device_src, size);
+    }
+
+    bool StreamExecutor::Memcpy(Stream *stream, DeviceMemoryBase *device_dst,
+            const void *host_src, uint64 size) {
+        return implementation_->Memcpy(stream, device_dst, host_src, size);
+    }
+
+    bool StreamExecutor::MemcpyDeviceToDevice(Stream *stream,
+            DeviceMemoryBase *device_dst,
+            const DeviceMemoryBase &device_src,
+            uint64 size) {
+        return implementation_->MemcpyDeviceToDevice(stream, device_dst, device_src,
+                size);
+    }
+
     port::Status StreamExecutor::BlockHostUntilDone(Stream *stream) {
         port::Status result;
         result = implementation_->BlockHostUntilDone(stream);

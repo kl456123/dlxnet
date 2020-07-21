@@ -64,7 +64,7 @@ namespace dlxnet{
                 // create kernel
                 auto executor = stream->parent();
                 se::MultiKernelLoaderSpec kernel_loader_spec(6);
-                const string kernel_fn = "../dlxnet/example/cl/vec_add.ocl";
+                const string kernel_fn = "../dlxnet/example/cl/matmul.ocl";
                 kernel_loader_spec.AddOpenCLTextOnDisk(kernel_fn,
                         "matmul");
                 using KernelType = se::TypedKernel<se::DeviceMemory<T>*,

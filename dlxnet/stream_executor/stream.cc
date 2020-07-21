@@ -90,4 +90,64 @@ namespace stream_executor{
 
         return *this;
     }
+
+    Stream &Stream::ThenMemcpy(void *host_dst, const DeviceMemoryBase &gpu_src,
+            uint64 size) {
+        // VLOG_CALL(PARAM(host_dst), PARAM(gpu_src), PARAM(size));
+
+        if (ok()) {
+            CheckError(parent_->Memcpy(this, host_dst, gpu_src, size));
+        } else {
+            LOG(INFO) << DebugStreamPointers()
+                << " did not memcpy device-to-host; source: " << gpu_src.opaque();
+        }
+        return *this;
+    }
+
+    Stream &Stream::ThenMemcpy(DeviceMemoryBase *gpu_dst, const void *host_src,
+            uint64 size) {
+        // VLOG_CALL(PARAM(gpu_dst), PARAM(host_src), PARAM(size));
+
+        if (ok()) {
+            CheckError(parent_->Memcpy(this, gpu_dst, host_src, size));
+        } else {
+            LOG(INFO) << DebugStreamPointers()
+                << " did not memcpy host-to-device; source: " << host_src;
+        }
+        return *this;
+    }
+
+    Stream &Stream::ThenMemcpy(DeviceMemoryBase *gpu_dst,
+            const DeviceMemoryBase &gpu_src, uint64 size) {
+        // VLOG_CALL(PARAM(gpu_dst), PARAM(gpu_src), PARAM(size));
+
+        if (ok()) {
+            CheckError(parent_->MemcpyDeviceToDevice(this, gpu_dst, gpu_src, size));
+        } else {
+            LOG(INFO) << DebugStreamPointers()
+                << " did not memcpy gpu-to-gpu; source: " << &gpu_src;
+        }
+        return *this;
+    }
+
+    Stream &Stream::ThenWaitFor(Stream *other) {
+        // VLOG_CALL(PARAM(other));
+
+        // CHECK(this != other) << "stream cannot wait for itself";
+        // if (ok() && other->ok()) {
+        // CheckError(parent_->CreateStreamDependency(this, other));
+        // } else {
+        // SetError();
+        // LOG(INFO) << DebugStreamPointers() << " did not wait for "
+        // << other->DebugStreamPointers();
+        // }
+        return *this;
+    }
+
+    string Stream::DebugStreamPointers() const {
+        return absl::StrCat("[stream=", ",impl=", "]");
+        // Relies on the ToVlogString(const void*) overload above.
+        // return absl::StrCat("[stream=", ToVlogString(this),
+        // ",impl=", ToVlogString(implementation_.get()), "]");
+    }
 }//namespace stream_executor
