@@ -14,6 +14,7 @@
 #include "dlxnet/core/graph/graph_partition.h"
 #include "dlxnet/core/graph/graph_constructor.h"
 #include "dlxnet/core/common_runtime/graph_optimizer.h"
+#include "dlxnet/core/common_runtime/rendezvous_mgr.h"
 
 
 namespace dlxnet{
@@ -372,6 +373,10 @@ namespace dlxnet{
         }
 
         args.runner = default_runner;
+
+        PrivateIntraProcessRendezvous rendezvous(device_mgr_.get());
+        args.rendezvous = &rendezvous;
+
         const auto& item = executors_and_keys->items[0];
         // set_threadpool_args_for_item(item, &args);
         run_status = item.executor->Run(args);
@@ -519,6 +524,11 @@ namespace dlxnet{
                 if (kernel){
                     delete kernel;
                 }
+            };
+            params.rendezvous_factory = [](const int64, const DeviceMgr* device_mgr,
+                    Rendezvous** r) {
+                *r = new IntraProcessRendezvous(device_mgr);
+                return Status::OK();
             };
             // optimizer.Optimize(options_.env, device, &partition_graph,
             // [>shape_map=<]nullptr);

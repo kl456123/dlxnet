@@ -9,14 +9,19 @@
 #include "dlxnet/core/lib/core/notification.h"
 #include "dlxnet/core/lib/core/errors.h"
 #include "dlxnet/core/common_runtime/device.h"
+// #include "dlxnet/core/common_runtime/rendezvous_mgr.h"
+#include "dlxnet/core/framework/rendezvous.h"
 #include "dlxnet/core/graph/graph.h"
 
 namespace dlxnet{
     class Executor{
         public:
             virtual ~Executor() {}
+            typedef std::function<Status(const int64, const DeviceMgr*, Rendezvous** r)>
+                RendezvousFactory;
             struct Args {
                 int64 step_id = 0;
+                RendezvousInterface* rendezvous = nullptr;
                 CallFrameInterface* call_frame = nullptr;
                 SessionState* session_state = nullptr;
                 // Unique session identifier. Can be empty.
@@ -59,6 +64,7 @@ namespace dlxnet{
         // delete_kernel is called for every kernel used by the executor
         // when the executor is deleted.
         std::function<Status(Device* device, const NodeDef&, OpKernel**)> create_kernel;
+        Executor::RendezvousFactory rendezvous_factory;
         std::function<void(OpKernel*)> delete_kernel;
     };
     ::dlxnet::Status NewLocalExecutor(const LocalExecutorParams& params,

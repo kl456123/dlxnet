@@ -396,6 +396,9 @@ namespace dlxnet{
 
             // true if LogMemory::IsEnabled(). Used to check memory enabled cheaply.
             const bool log_memory_;
+            // Not owned.
+            RendezvousInterface* rendezvous_;
+            Executor::RendezvousFactory* create_rendezvous_ = nullptr;
             SessionState* session_state_;
             string session_handle_;
             CallFrameInterface* call_frame_;
@@ -474,6 +477,21 @@ namespace dlxnet{
         CHECK(done_cb != nullptr);
         Device* device = impl_->params_.device;
 
+        if (!status.ok()) {
+            // In device async execution mode, it's possible for device execution to
+            // lag behind ExecutorState scheduling so much that this is the first
+            // place a device execution error surfaces.
+            // If so, all ExecutorState::NodeDone calls have already happened with OK
+            // status. This is the last defense where StartCancel must be called to
+            // abort all computation still running on any device.
+            // TODO(b/124523000): Always call Finish in a separate thread, so even if
+            // StartCancel blocks the current thread's execution, we won't encounter
+            // deadlocks caused by inter-op thread exhaustion.
+            if (rendezvous_) {
+                rendezvous_->StartAbort(status);
+            }
+        }
+
         delete this;
         runner([step_id, status, done_cb = std::move(done_cb)]() {
                 done_cb(status);
@@ -501,6 +519,8 @@ namespace dlxnet{
         AllocatorAttributeVec input_alloc_attrs;
 
         params.log_memory = log_memory_;
+        params.rendezvous = rendezvous_;
+        params.create_rendezvous = create_rendezvous_;
         params.session_state = session_state_;
         params.session_handle = session_handle_;
         params.call_frame = call_frame_;
@@ -686,6 +706,30 @@ namespace dlxnet{
     bool ExecutorState::NodeDone(const Status& s, const TaggedNodeSeq& ready,
             TaggedNodeReadyQueue* inline_ready){
         int ready_size = ready.size();
+        bool abort_run = false;
+        if (!s.ok()) {
+            // Some error happened. This thread of computation is done.
+            mutex_lock l(mu_);
+            if (status_.ok()) {
+                abort_run = true;
+
+                // If execution has been cancelled, mark any new errors as being derived.
+                // This ensures any errors triggered by cancellation are marked as
+                // derived.
+                // if (cancellation_manager_ && cancellation_manager_->IsCancelled()) {
+                // status_ = StatusGroup::MakeDerived(s);
+                // } else {
+                status_ = s;
+                // }
+            }
+        }
+
+        if (abort_run) {
+            if (rendezvous_) {
+                rendezvous_->StartAbort(s);
+            }
+        }
+
         bool completed = false;
         if (ready_size == 0 || !s.ok()) {
             completed = (num_outstanding_ops_.fetch_sub(1) == 1);
@@ -819,6 +863,8 @@ namespace dlxnet{
         : vlog_(VLOG_IS_ON(1)),
         log_memory_(LogMemory::IsEnabled()),
         step_id_(args.step_id),
+        rendezvous_(args.rendezvous),
+        create_rendezvous_(&impl->params_.rendezvous_factory),
         session_state_(args.session_state),
         session_handle_(args.session_handle),
         call_frame_(args.call_frame),
