@@ -8,6 +8,7 @@
 #include "dlxnet/core/common_runtime/executor.h"
 #include "dlxnet/core/common_runtime/graph_execution_state.h"
 #include "dlxnet/core/common_runtime/build_graph_options.h"// used for build subgraph
+#include "dlxnet/core/common_runtime/rendezvous_mgr.h"
 #include "dlxnet/core/lib/core/status.h"
 #include "dlxnet/core/lib/core/stringpiece.h"
 #include "dlxnet/core/lib/core/threadpool.h"
@@ -86,6 +87,35 @@ namespace dlxnet{
                 // useless
                 int64 collective_graph_key = -1;
             };
+
+            // For each live partial execution, the session maintains a RunState.
+            // 'status' is the current status of this partial execution. 'executor_done'
+            // is "notified" when all executors are done. 'pending_inputs' are the set
+            // of pending feeds and 'pending_outputs' are the set of pending fetches.
+            struct RunState {
+                mutex mu;
+                Status status GUARDED_BY(mu);
+                IntraProcessRendezvous* rendez = nullptr;
+                // std::unique_ptr<CollectiveExecutor::Handle> collective_executor;
+                // std::unique_ptr<StepStatsCollector> collector;
+                Notification executors_done;
+                std::unordered_map<string, bool> pending_inputs;   // true if fed
+                std::unordered_map<string, bool> pending_outputs;  // true if fetched
+                // TensorStore tensor_store;
+                // ScopedStepContainer step_container;
+
+                RunState(int64 step_id, const std::vector<Device*>* devices);
+
+                RunState(const std::vector<string>& pending_input_names,
+                        const std::vector<string>& pending_output_names, int64 step_id,
+                        const std::vector<Device*>* devices);
+
+                // Returns true if all pending inputs and outputs have been completed.
+                bool PendingDone() const;
+
+                ~RunState();
+            };
+
             // Retrieves an already existing set of executors to run 'inputs' and
             // 'outputs', or creates and caches them for future use.
             Status GetOrCreateExecutors(
@@ -93,7 +123,14 @@ namespace dlxnet{
                     gtl::ArraySlice<string> target_nodes,
                     ExecutorsAndKeys** executors_and_keys);
 
-
+            // Use the appropriate WaitForNotification function based on whether
+            // operation_timeout_in_ms is greater than 0.
+            //
+            // If the timeout expires, the `cm->StartCancel()` will be called.
+            ::dlxnet::Status WaitForNotification(Notification* n,
+                    int64 timeout_in_ms);
+            void WaitForNotification(Notification* n, RunState* run_state,
+                    int64 timeout_in_ms);
 
             // Creates a set of executors to run the subgraph defined by
             // `callable_options`.
@@ -179,6 +216,10 @@ namespace dlxnet{
 
             // For generating step ids that are unique among all sessions.
             static std::atomic_int_fast64_t step_id_counter_;
+
+            // Global timeout for all blocking operations in this session.
+            const int64 operation_timeout_in_ms_ = 0;
+
             // Run in caller's thread if RunOptions.inter_op_thread_pool is negative or
             // all of following conditions are met:
             // 1. This session doesn't own any thread pool.

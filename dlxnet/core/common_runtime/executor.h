@@ -70,6 +70,80 @@ namespace dlxnet{
     ::dlxnet::Status NewLocalExecutor(const LocalExecutorParams& params,
             const Graph& graph, Executor** executor);
 
+    // A class to help run multiple executors in parallel and wait until
+    // all of them are complete.
+    //
+    // ExecutorBarrier deletes itself after the function returned by Get()
+    // is called.
+    class ExecutorBarrier {
+        public:
+            typedef std::function<void(const Status&)> StatusCallback;
+
+            // Create an ExecutorBarrier for 'num' different executors.
+            //
+            // 'r' is the shared Rendezvous object that is used to communicate
+            // state.  If any of the executors experiences an error, the
+            // rendezvous object will be aborted exactly once.
+            //
+            // 'done' is called after the last executor completes, and
+            // ExecutorBarrier is deleted.
+            ExecutorBarrier(size_t num, Rendezvous* r, StatusCallback done)
+                : rendez_(r), done_cb_(done), pending_(num) {}
+
+            ~ExecutorBarrier() {}
+
+            // Returns a closure that Executors must call when they are done
+            // computing, passing the status of their execution as an argument.
+            StatusCallback Get() {
+                return std::bind(&ExecutorBarrier::WhenDone, this, std::placeholders::_1);
+            }
+
+        private:
+            Rendezvous* rendez_ = nullptr;
+            StatusCallback done_cb_ = nullptr;
+            mutable mutex mu_;
+            int pending_ GUARDED_BY(mu_) = 0;
+
+            void WhenDone(const Status& s) {
+                Rendezvous* error_rendez = nullptr;
+                StatusCallback done = nullptr;
+                Status status;
+
+                {
+                    mutex_lock l(mu_);
+
+                    // If we are the first error encountered, trigger an abort of the
+                    // Rendezvous object by this thread only.
+                    if (!s.ok()) {
+                        error_rendez = rendez_;
+                        error_rendez->Ref();
+                    }
+
+                    // If this is the last call to WhenDone, call the final callback
+                    // below.
+                    if (--pending_ == 0) {
+                        CHECK(done_cb_ != nullptr);
+                        std::swap(done, done_cb_);
+                        status = s;
+                    }
+                }
+
+                if (error_rendez != nullptr) {
+                    error_rendez->StartAbort(
+                            errors::Aborted("Stopping remaining executors."));
+                    error_rendez->Unref();
+                }
+
+                if (done != nullptr) {
+                    delete this;
+                    if (!status.ok()) {
+                        VLOG(1) << "ExecutorBarrier finished with bad status: " << status;
+                    }
+                    done(status);
+                }
+            }
+    };
+
     // A few helpers to facilitate create/delete kernels.
 
     // Creates a kernel based on "ndef" on device "device". The kernel can

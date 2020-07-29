@@ -2,6 +2,7 @@
 
 #include "dlxnet/core/common_runtime/direct_session.h"
 #include "dlxnet/core/common_runtime/session_factory.h"
+#include "dlxnet/core/common_runtime/process_util.h"
 #include "dlxnet/core/common_runtime/device_factory.h"
 #include "dlxnet/core/common_runtime/device_mgr.h"
 #include "dlxnet/core/common_runtime/executor.h"
@@ -67,7 +68,13 @@ namespace dlxnet{
             *pool = mvalue->second;
             return Status::OK();
         }
-    }
+
+        thread::ThreadPool* GlobalThreadPool(const SessionOptions& options) {
+            static thread::ThreadPool* const thread_pool =
+                NewThreadPoolFromSessionOptions(options);
+            return thread_pool;
+        }
+    } // namespace
     // session factory
     class DirectSessionFactory : public SessionFactory {
         public:
@@ -170,7 +177,8 @@ namespace dlxnet{
             DirectSessionFactory* factory)
         :options_(options),
         device_mgr_(device_mgr),
-        factory_(factory){
+        factory_(factory),
+        operation_timeout_in_ms_(options_.config.operation_timeout_in_ms()){
             // build thread pool
             const int thread_pool_size =
                 options_.config.session_inter_op_thread_pool_size();
@@ -421,19 +429,34 @@ namespace dlxnet{
         // Use std::unique_ptr to ensure garbage collection
         std::unique_ptr<thread::ThreadPool> threadpool_wrapper;
         thread::ThreadPool* pool = nullptr;
+        RunState run_state(step_id, &devices_);
+
+        if (run_in_caller_thread_) {
+            pool = nullptr;
+        } else if (threadpool_options.inter_op_threadpool != nullptr) {
+            threadpool_wrapper = absl::make_unique<thread::ThreadPool>(
+                    threadpool_options.inter_op_threadpool);
+            pool = threadpool_wrapper.get();
+        } else if (run_options.inter_op_thread_pool() >= 0) {
+            pool = thread_pools_[run_options.inter_op_thread_pool()].first;
+        }
+
+        const int64 call_timeout = run_options.timeout_in_ms() > 0
+            ? run_options.timeout_in_ms()
+            : operation_timeout_in_ms_;
 
         if (pool == nullptr) {
             // We allow using the caller thread only when having a single executor
             // specified.
             if (executors_and_keys->items.size() > 1) {
-                // disable async execution
-                // pool = thread_pools_[0].first;
+                pool = thread_pools_[0].first;
             } else {
                 VLOG(1) << "Executing Session::Run() synchronously!";
             }
         }
 
-        const bool can_execute_synchronously = false;
+        const bool can_execute_synchronously =
+            executors_and_keys->items.size() == 1 && call_timeout == 0;
 
         // used to run executor
         Executor::Args args;
@@ -447,33 +470,67 @@ namespace dlxnet{
         Executor::Args::Runner default_runner = nullptr;
         if (pool == nullptr) {
             default_runner = [](Executor::Args::Closure c) { c(); };
+        }else {
+            default_runner = [this, pool](Executor::Args::Closure c) {
+                pool->Schedule(std::move(c));
+            };
         }
 
-        args.runner = default_runner;
+        auto set_threadpool_args_for_item =
+            [&default_runner](const PerPartitionExecutorsAndLib& item,
+                    Executor::Args* args) {
+                // TODO(azaks): support partial run.
+                // TODO(azaks): if the device picks its own threadpool, we need to
+                // assign
+                //     less threads to the main compute pool by default.
+                thread::ThreadPool* device_thread_pool =
+                    item.device->tensorflow_device_thread_pool();
+                // TODO(crk): Investigate usage of RunHandlerPool when using device
+                // specific thread pool(s).
+                if (!device_thread_pool) {
+                    args->runner = default_runner;
+                } else {
+                    args->runner = [device_thread_pool](Executor::Args::Closure c) {
+                        device_thread_pool->Schedule(std::move(c));
+                    };
+                }
+            };
+
+        // args.runner = default_runner;
 
         if (can_execute_synchronously) {
             PrivateIntraProcessRendezvous rendezvous(device_mgr_.get());
             args.rendezvous = &rendezvous;
 
             const auto& item = executors_and_keys->items[0];
-            // set_threadpool_args_for_item(item, &args);
+            set_threadpool_args_for_item(item, &args);
             run_status = item.executor->Run(args);
         }else{
             core::RefCountPtr<RefCountedIntraProcessRendezvous> rendezvous(
                     new RefCountedIntraProcessRendezvous(device_mgr_.get()));
             args.rendezvous = rendezvous.get();
 
+            // `barrier` will delete itself after the final executor finishes.
+            Notification executors_done;
+            ExecutorBarrier* barrier = new ExecutorBarrier(num_executors, rendezvous.get(),
+                    [&run_state, &executors_done](const Status& ret) {
+                    {
+                    mutex_lock l(run_state.mu);
+                    run_state.status.Update(ret);
+                    }
+                    executors_done.Notify();
+                    });
+
+
             for (const auto& item : executors_and_keys->items) {
-                // set_threadpool_args_for_item(item, &args);
-                // item.executor->RunAsync(args, barrier->Get());
-                run_status.Update(item.executor->Run(args));
+                set_threadpool_args_for_item(item, &args);
+                item.executor->RunAsync(args, barrier->Get());
             }
 
-            // WaitForNotification(&executors_done, &run_state, &step_cancellation_manager,
-            // call_timeout);
+            WaitForNotification(&executors_done, &run_state, operation_timeout_in_ms_);
             {
-                // tf_shared_lock l(run_state.mu);
-                // run_status = run_state.status;
+                tf_shared_lock l(run_state.mu);
+                run_status = run_state.status;
             }
         }
 
@@ -487,6 +544,75 @@ namespace dlxnet{
         }
 
         auto duration = options_.env->NowMicros() - start_time_usecs;
+        return Status::OK();
+    }
+
+    DirectSession::RunState::RunState(
+            const std::vector<string>& pending_input_names,
+            const std::vector<string>& pending_output_names, int64 step_id,
+            const std::vector<Device*>* devices){
+        // Initially all the feeds and fetches are pending.
+        for (auto& name : pending_input_names) {
+            pending_inputs[name] = false;
+        }
+        for (auto& name : pending_output_names) {
+            pending_outputs[name] = false;
+        }
+    }
+
+    DirectSession::RunState::RunState(int64 step_id,
+            const std::vector<Device*>* devices)
+        : RunState({}, {}, step_id, devices) {}
+
+    DirectSession::RunState::~RunState() {
+        if (rendez != nullptr) {
+            if (!executors_done.HasBeenNotified()) {
+                rendez->StartAbort(errors::Cancelled("PRun cancellation"));
+                executors_done.WaitForNotification();
+            }
+            rendez->Unref();
+        }
+    }
+
+    bool DirectSession::RunState::PendingDone() const {
+        for (const auto& it : pending_inputs) {
+            if (!it.second) return false;
+        }
+        for (const auto& it : pending_outputs) {
+            if (!it.second) return false;
+        }
+        return true;
+    }
+
+    void DirectSession::WaitForNotification(Notification* n, RunState* run_state,
+            int64 timeout_in_ms) {
+        const Status status = WaitForNotification(n, timeout_in_ms);
+        if (!status.ok()) {
+            {
+                mutex_lock l(run_state->mu);
+                run_state->status.Update(status);
+            }
+            // cm->StartCancel();
+            // We must wait for the executors to complete, because they have borrowed
+            // references to `cm` and other per-step state. After this notification, it
+            // is safe to clean up the step.
+            n->WaitForNotification();
+        }
+    }
+
+    ::dlxnet::Status DirectSession::WaitForNotification(
+            Notification* notification, int64 timeout_in_ms) {
+        if (timeout_in_ms > 0) {
+            const int64 timeout_in_us = timeout_in_ms * 1000;
+            const bool notified =
+                WaitForNotificationWithTimeout(notification, timeout_in_us);
+            if (!notified) {
+                return Status(error::DEADLINE_EXCEEDED,
+                        "Timed out waiting for notification");
+            }
+        } else {
+            notification->WaitForNotification();
+        }
         return Status::OK();
     }
 
