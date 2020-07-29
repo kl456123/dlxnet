@@ -111,6 +111,9 @@ namespace dlxnet{
             // Node type helpers.
             bool IsSource() const { return id() == 0; }
             bool IsSink() const { return id() == 1; }
+            bool IsSend() const { return class_ == NC_SEND || class_ == NC_HOST_SEND; }
+            bool IsConstant() const { return class_ == NC_CONSTANT; }
+            bool IsRecv() const { return class_ == NC_RECV || class_ == NC_HOST_RECV; }
             // Anything other than the special Source & Sink nodes.
             bool IsOp() const { return id() > 1; }
 
@@ -131,9 +134,16 @@ namespace dlxnet{
 
             enum NodeClass{
                 NC_UNINITIALIZED,
-                NC_OTHER
+                NC_OTHER,
+                NC_SEND,
+                NC_HOST_SEND,
+                NC_RECV,
+                NC_HOST_RECV,
+                NC_CONSTANT
             };
+
             static NodeClass GetNodeClassForOp(const string& ts);
+            static const std::unordered_map<string, NodeClass>& kNodeClassTable;
 
             friend class Graph;
             Node();
@@ -393,6 +403,13 @@ namespace dlxnet{
     };
     inline bool IsSource(const Node* node) { return node->IsSource(); }
     inline bool IsSink(const Node* node) { return node->IsSink(); }
+    inline bool IsSend(const Node* node) { return node->IsSend(); }
+    inline bool IsRecv(const Node* node) { return node->IsRecv(); }
+
+    // True for Nodes that mediate the transfer of values between processes.
+    inline bool IsTransferNode(const Node* n) { return IsSend(n) || IsRecv(n); }
+
+    inline bool IsConstant(const Node* node) { return node->IsConstant(); }
 
 
     class NodeIter : public std::iterator<std::forward_iterator_tag, Node, std::ptrdiff_t,

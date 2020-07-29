@@ -9,6 +9,10 @@
 
 
 namespace dlxnet{
+    namespace{
+        // 1-D, 0 element tensor.
+        static const Tensor* const kEmptyTensor = new Tensor;
+    }
     class ExecutorImpl;
     class GraphView;
     class NodeItem;
@@ -33,6 +37,7 @@ namespace dlxnet{
         // Cached attributes of this node for fast lookup.
         bool kernel_is_async : 1;     // True iff kernel->AsAsync() != nullptr
         bool is_source : 1;           // True iff IsSource(node)
+        bool is_transfer_node : 1;      // True iff IsTransferNode(node)
         bool is_sink : 1;             // True iff IsSink(node)
 
         // The kernel for this node.
@@ -393,6 +398,7 @@ namespace dlxnet{
                     int front_index_;
             };
             const bool vlog_;  // true if VLOG_IS_ON(1). Used to check vlog cheaply.
+            struct AsyncState;
 
             // true if LogMemory::IsEnabled(). Used to check memory enabled cheaply.
             const bool log_memory_;
@@ -460,6 +466,34 @@ namespace dlxnet{
                     int64 input_iter) const NO_THREAD_SAFETY_ANALYSIS {
                 return input_frame->GetIteration(input_iter)->input_tensors;
             }
+    };
+
+    // State kept alive for executing an asynchronous node in another
+    // thread.  NOTE: We need to make a copy of p.input and p.input_alloc_attrs for
+    // asynchronous kernels because OpKernelContext methods like input_type(i) needs
+    // the param points to valid input type vector. It's not an issue for
+    // sync kernels because these vectors are kept on the stack.
+    struct ExecutorState::AsyncState {
+        AsyncState(const OpKernelContext::Params& p, const TaggedNode& _tagged_node,
+                const NodeItem* _item, Entry* _first_input)
+            : saved_inputs(*p.inputs),
+            saved_input_alloc_attrs(*p.input_alloc_attrs),
+            params(p),
+            tagged_node(_tagged_node),
+            item(_item),
+            first_input(_first_input),
+            ctx(&params, item->num_outputs){
+                params.inputs = &saved_inputs;
+                params.input_alloc_attrs = &saved_input_alloc_attrs;
+            }
+
+        TensorValueVec saved_inputs;
+        AllocatorAttributeVec saved_input_alloc_attrs;
+        OpKernelContext::Params params;
+        TaggedNode tagged_node;
+        const NodeItem* item;
+        Entry* first_input;
+        OpKernelContext ctx;
     };
 
     ExecutorState::~ExecutorState(){
@@ -555,40 +589,87 @@ namespace dlxnet{
 
             Entry* input_tensors = GetInputTensors(input_frame, input_iter);
             Entry* first_input = input_tensors + item.input_start;
+
+            // Only execute this node if it is not dead or it is a send/recv
+            // transfer node. For transfer nodes, we need to propagate the "dead"
+            // bit even when the node is dead.
             bool launched_asynchronously = false;
+            if (tagged_node.is_dead && !item.is_transfer_node) {
+                outputs.resize(item.num_outputs);
+            } else {
+                // Prepares inputs.
+                bool is_input_dead = false;
+                s = PrepareInputs(item, first_input, &inputs, &input_alloc_attrs,
+                        &is_input_dead);
 
-            // Prepares inputs.
-            bool is_input_dead = false;
-            s = PrepareInputs(item, first_input, &inputs, &input_alloc_attrs,
-                    &is_input_dead);
-
-            if (!s.ok()) {
-                // Clear inputs.
-                int num_inputs = item.num_inputs;
-                for (int i = 0; i < num_inputs; ++i) {
-                    // (first_input + i)->ClearVal();
+                if (!s.ok()) {
+                    // Clear inputs.
+                    int num_inputs = item.num_inputs;
+                    for (int i = 0; i < num_inputs; ++i) {
+                        (first_input + i)->ClearVal();
+                    }
+                    // MaybeMarkCompleted(input_frame, input_iter, item);
+                    // Continue to process the nodes in 'inline_ready'.
+                    completed = NodeDone(s, ready, &inline_ready);
+                    continue;
                 }
-                // MaybeMarkCompleted(input_frame, input_iter, item);
-                // Continue to process the nodes in 'inline_ready'.
-                completed = NodeDone(s, ready, &inline_ready);
-                continue;
-            }
 
-            // Set up compute params.
-            OpKernel* op_kernel = item.kernel;
-            params.op_kernel = op_kernel;
-            params.is_input_dead = is_input_dead;
-            params.output_attr_array = item.output_attr_list();
-            if (item.kernel_is_async) {
-                // Asynchronous computes.
-                launched_asynchronously = true;
-                // not supported now
-            }else{
-                // Synchronous computes.
-                OpKernelContext ctx(&params, item.num_outputs);
-                device->Compute(op_kernel, &ctx);
-                s = ProcessOutputs(item, &ctx, &outputs);
-                device_context = ctx.op_device_context();
+                // Set up compute params.
+                OpKernel* op_kernel = item.kernel;
+                params.op_kernel = op_kernel;
+                params.is_input_dead = is_input_dead;
+                params.output_attr_array = item.output_attr_list();
+                if (item.kernel_is_async) {
+                    // Asynchronous computes.
+                    AsyncOpKernel* async = item.kernel->AsAsync();
+                    DCHECK(async != nullptr);
+                    launched_asynchronously = true;
+                    AsyncState* state =
+                        new AsyncState(params, tagged_node, &item, first_input);
+                    auto done = [this, state]() {
+                        Device* device = impl_->params_.device;
+                        // NodeExecStatsInterface* stats = state->stats;  // Shorthand
+                        Entry* first_input = state->first_input;       // Shorthand
+
+                        // nodestats::SetOpEnd(stats);
+                        EntryVector outputs;
+                        Status s = ProcessOutputs(*state->item, &state->ctx, &outputs);
+                        // nodestats::SetMemory(stats, &state->ctx);
+                        if (vlog_) {
+                            VLOG(2) << "Async kernel done: " << state->item->node_id << " step "
+                                << step_id_ << " "
+                                << SummarizeNodeDef(state->item->kernel->def())
+                                << (state->tagged_node.is_dead ? " is dead" : "")
+                                << " device: " << device->name();
+                        }
+
+                        // Clears inputs.
+                        const int num_inputs = state->item->num_inputs;
+                        for (int i = 0; i < num_inputs; ++i) {
+                            (first_input + i)->ClearVal();
+                        }
+                        FrameState* input_frame = state->tagged_node.input_frame;
+                        const int64 input_iter = state->tagged_node.input_iter;
+                        // MaybeMarkCompleted(input_frame, input_iter, *state->item);
+                        TaggedNodeSeq ready;
+                        if (s.ok()) {
+                            PropagateOutputs(state->tagged_node, state->item, &outputs, &ready);
+                        }
+                        outputs.clear();
+
+                        const bool completed = NodeDone(s, ready, nullptr);
+                        delete state;
+                        if (completed) ScheduleFinish();
+                    };
+
+                    device->ComputeAsync(async, &state->ctx, done);
+                }else{
+                    // Synchronous computes.
+                    OpKernelContext ctx(&params, item.num_outputs);
+                    device->Compute(op_kernel, &ctx);
+                    s = ProcessOutputs(item, &ctx, &outputs);
+                    device_context = ctx.op_device_context();
+                }
             }
 
             if (!launched_asynchronously) {
@@ -597,6 +678,11 @@ namespace dlxnet{
                         << params.step_id << " " << SummarizeNodeDef(item.kernel->def())
                         << (tagged_node.is_dead ? " is dead: " : "")
                         << " device: " << device->name();
+                }
+                // Clears inputs.
+                const int num_inputs = item.num_inputs;
+                for (int i = 0; i < num_inputs; ++i) {
+                    (first_input + i)->ClearVal();
                 }
 
                 // Propagates outputs.
@@ -660,6 +746,15 @@ namespace dlxnet{
 
             // Only merge and transfer nodes can have no-value inputs.
             if (!entry->has_value) {
+                DCHECK(item.is_transfer_node)
+                    << item.kernel->name() << " - input " << i;
+                DCHECK(!entry->val_field_is_set)
+                    << item.kernel->name() << " - input " << i;
+                entry->has_value = true;
+                entry->val_field_is_set = true;
+                entry->val.Init(*kEmptyTensor);
+                inp->tensor = entry->val.get();
+                *is_input_dead = true;
                 continue;
             }
             if (entry->ref == nullptr) {
@@ -943,6 +1038,7 @@ namespace dlxnet{
 
             CHECK(item->kernel);
             item->kernel_is_async = (item->kernel->AsAsync() != nullptr);
+            item->is_transfer_node = IsTransferNode(n);
             item->is_source = IsSource(n);
             item->is_sink = IsSink(n);
 

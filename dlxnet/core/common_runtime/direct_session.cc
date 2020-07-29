@@ -15,9 +15,59 @@
 #include "dlxnet/core/graph/graph_constructor.h"
 #include "dlxnet/core/common_runtime/graph_optimizer.h"
 #include "dlxnet/core/common_runtime/rendezvous_mgr.h"
+#include "dlxnet/core/lib/core/refcount.h"
 
 
 namespace dlxnet{
+    namespace{
+        Status NewThreadPoolFromThreadPoolOptions(
+                const SessionOptions& options,
+                const ThreadPoolOptionProto& thread_pool_options, int pool_number,
+                thread::ThreadPool** pool, bool* owned) {
+            int32 num_threads = thread_pool_options.num_threads();
+            if (num_threads == 0) {
+                num_threads = NumInterOpThreadsFromSessionOptions(options);
+            }
+            const string& name = thread_pool_options.global_name();
+            if (name.empty()) {
+                // Session-local threadpool.
+                VLOG(1) << "Direct session inter op parallelism threads for pool "
+                    << pool_number << ": " << num_threads;
+                *pool = new thread::ThreadPool(
+                        options.env, ThreadOptions(), strings::StrCat("Compute", pool_number),
+                        num_threads, !options.config.experimental().disable_thread_spinning(),
+                        /*allocator=*/nullptr);
+                *owned = true;
+                return Status::OK();
+            }
+
+            // Global, named threadpool.
+            typedef std::pair<int32, thread::ThreadPool*> MapValue;
+            static std::map<string, MapValue>* global_pool_map =
+                new std::map<string, MapValue>;
+            static mutex* mu = new mutex();
+            mutex_lock l(*mu);
+            MapValue* mvalue = &(*global_pool_map)[name];
+            if (mvalue->second == nullptr) {
+                mvalue->first = thread_pool_options.num_threads();
+                mvalue->second = new thread::ThreadPool(
+                        options.env, ThreadOptions(), strings::StrCat("Compute", pool_number),
+                        num_threads, !options.config.experimental().disable_thread_spinning(),
+                        /*allocator=*/nullptr);
+            } else {
+                if (mvalue->first != thread_pool_options.num_threads()) {
+                    return errors::InvalidArgument(
+                            "Pool ", name,
+                            " configured previously with num_threads=", mvalue->first,
+                            "; cannot re-configure with num_threads=",
+                            thread_pool_options.num_threads());
+                }
+            }
+            *owned = false;
+            *pool = mvalue->second;
+            return Status::OK();
+        }
+    }
     // session factory
     class DirectSessionFactory : public SessionFactory {
         public:
@@ -124,7 +174,28 @@ namespace dlxnet{
             // build thread pool
             const int thread_pool_size =
                 options_.config.session_inter_op_thread_pool_size();
-            for(int i=0;i<thread_pool_size;i++){
+            if (thread_pool_size > 0) {
+                for (int i = 0; i < thread_pool_size; ++i) {
+                    thread::ThreadPool* pool = nullptr;
+                    bool owned = false;
+                    init_error_.Update(NewThreadPoolFromThreadPoolOptions(
+                                options_, options_.config.session_inter_op_thread_pool(i), i, &pool,
+                                &owned));
+                    thread_pools_.emplace_back(pool, owned);
+                }
+            } else if (options_.config.use_per_session_threads()) {
+                thread_pools_.emplace_back(NewThreadPoolFromSessionOptions(options_),
+                        true /* owned */);
+            } else {
+                thread_pools_.emplace_back(GlobalThreadPool(options), false /* owned */);
+                // Run locally if environment value of TF_NUM_INTEROP_THREADS is negative
+                // and config.inter_op_parallelism_threads is unspecified or negative.
+                static const int env_num_threads = NumInterOpThreadsFromEnvironment();
+                if (options_.config.inter_op_parallelism_threads() < 0 ||
+                        (options_.config.inter_op_parallelism_threads() == 0 &&
+                         env_num_threads < 0)) {
+                    run_in_caller_thread_ = true;
+                }
             }
 
             session_handle_ =
@@ -346,6 +417,9 @@ namespace dlxnet{
             const thread::ThreadPoolOptions& threadpool_options){
         const uint64 start_time_usecs = options_.env->NowMicros();
         const size_t num_executors = executors_and_keys->items.size();
+
+        // Use std::unique_ptr to ensure garbage collection
+        std::unique_ptr<thread::ThreadPool> threadpool_wrapper;
         thread::ThreadPool* pool = nullptr;
 
         if (pool == nullptr) {
@@ -358,6 +432,9 @@ namespace dlxnet{
                 VLOG(1) << "Executing Session::Run() synchronously!";
             }
         }
+
+        const bool can_execute_synchronously = false;
+
         // used to run executor
         Executor::Args args;
         args.step_id = step_id;
@@ -374,12 +451,33 @@ namespace dlxnet{
 
         args.runner = default_runner;
 
-        PrivateIntraProcessRendezvous rendezvous(device_mgr_.get());
-        args.rendezvous = &rendezvous;
+        if (can_execute_synchronously) {
+            PrivateIntraProcessRendezvous rendezvous(device_mgr_.get());
+            args.rendezvous = &rendezvous;
 
-        const auto& item = executors_and_keys->items[0];
-        // set_threadpool_args_for_item(item, &args);
-        run_status = item.executor->Run(args);
+            const auto& item = executors_and_keys->items[0];
+            // set_threadpool_args_for_item(item, &args);
+            run_status = item.executor->Run(args);
+        }else{
+            core::RefCountPtr<RefCountedIntraProcessRendezvous> rendezvous(
+                    new RefCountedIntraProcessRendezvous(device_mgr_.get()));
+            args.rendezvous = rendezvous.get();
+
+            for (const auto& item : executors_and_keys->items) {
+                // set_threadpool_args_for_item(item, &args);
+                // item.executor->RunAsync(args, barrier->Get());
+                run_status.Update(item.executor->Run(args));
+            }
+
+            // WaitForNotification(&executors_done, &run_state, &step_cancellation_manager,
+            // call_timeout);
+            {
+                // tf_shared_lock l(run_state.mu);
+                // run_status = run_state.status;
+            }
+        }
+
+
         TF_RETURN_IF_ERROR(run_status);
 
         bool update_cost_model = false;

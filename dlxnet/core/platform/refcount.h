@@ -42,6 +42,16 @@ namespace dlxnet{
                 RefCounted(const RefCounted&) = delete;
                 void operator=(const RefCounted&) = delete;
         };
+        // A deleter class to form a std::unique_ptr that unrefs objects.
+        struct RefCountDeleter {
+            void operator()(dlxnet::core::RefCounted* o) const { o->Unref(); }
+        };
+
+        // A unique_ptr that unrefs the owned object on destruction.
+        template <typename T>
+            using RefCountPtr = std::unique_ptr<T, RefCountDeleter>;
+
+
         // Inlined routines, since these are performance critical
         inline RefCounted::RefCounted() : ref_(1) {}
 

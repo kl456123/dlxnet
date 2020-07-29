@@ -113,6 +113,27 @@ namespace dlxnet{
         }
     }
 
+    namespace {
+        Rendezvous::DoneCallback make_recv_callback(OpKernelContext* ctx,
+                AsyncOpKernel::DoneCallback done) {
+            return [ctx, done = std::move(done)](const Status& s,
+                    const Rendezvous::Args& send_args,
+                    const Rendezvous::Args& recv_args,
+                    const Tensor& val, bool is_dead) {
+                ctx->SetStatus(s);
+                if (s.ok()) {
+                    // 'ctx' allocates the output tensor of the expected type.
+                    // The runtime checks whether the tensor received here is
+                    // the same type.
+                    if (!is_dead) {
+                        ctx->set_output(0, val);
+                    }
+                }
+                done();
+            };
+        }
+    }  // namespace
+
     void RecvOp::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
         OP_REQUIRES_ASYNC(
                 ctx, ctx->rendezvous() != nullptr,
@@ -122,6 +143,21 @@ namespace dlxnet{
         Rendezvous::Args args;
         args.device_context = ctx->op_device_context();
         args.alloc_attrs = ctx->output_alloc_attr(0);
+
+        FrameAndIter frame_iter = GetFrameAndIter(ctx, hostmem_sendrecv_);
+        if (frame_iter == FrameAndIter(0, 0)) {
+            VLOG(2) << "Recv " << parsed_key_.buf_;
+            ctx->rendezvous()->RecvAsync(parsed_key_, args,
+                    make_recv_callback(ctx, std::move(done)));
+        } else {
+            Rendezvous::ParsedKey in_loop_parsed;
+            GetRendezvousKey(key_prefix_, frame_iter, &in_loop_parsed.buf_);
+            VLOG(2) << "Recv " << in_loop_parsed.buf_;
+            OP_REQUIRES_OK_ASYNC(
+                    ctx, Rendezvous::ParseKey(in_loop_parsed.buf_, &in_loop_parsed), done);
+            ctx->rendezvous()->RecvAsync(in_loop_parsed, args,
+                    make_recv_callback(ctx, std::move(done)));
+        }
     }
 
     REGISTER_KERNEL_BUILDER(Name("_Recv").Device(DEVICE_CPU), RecvOp);

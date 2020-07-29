@@ -19,8 +19,27 @@ namespace dlxnet{
             const DataTypeVector output_types;
     };
 
+#define REF_CLASS(key, value) \
+    {key, value}, { "Ref" key, value }
+
+    const std::unordered_map<string, Node::NodeClass>& Node::kNodeClassTable =
+        *new std::unordered_map<string, Node::NodeClass>({
+                // Keep in same order as NodeClass values
+                {"_Send", NC_SEND},
+                {"_HostSend", NC_HOST_SEND},
+                {"_Recv", NC_RECV},
+                {"_HostRecv", NC_HOST_RECV},
+                {"Const", NC_CONSTANT},
+                {"HostConst", NC_CONSTANT},
+                });
+
     Node::NodeClass Node::GetNodeClassForOp(const string& ts) {
-        return NC_OTHER;
+        auto it = kNodeClassTable.find(ts);
+        if (it != kNodeClassTable.end()) {
+            return it->second;
+        } else {
+            return NC_OTHER;
+        }
     }
 
     void Node::Initialize(int id,
