@@ -1000,7 +1000,7 @@ namespace dlxnet{
 
             // TODO(yuanbyu): We don't need this if we require the subgraph
             // given to an executor not to contain a sink node.
-            if (dst_item->is_sink) continue;
+            // if (dst_item->is_sink) continue;
 
             bool dst_ready = false;
             bool dst_dead = false;
