@@ -287,6 +287,7 @@ namespace dlxnet{
                     CHECK_GT(*current_pending_count, 0);
                     (*current_pending_count)--;
                     *pending_result = *current_pending_count;
+                    *dead_result = 0;
                 }
                 private:
                 PendingCounts* counts;
@@ -996,19 +997,31 @@ namespace dlxnet{
             // const PendingCounts::Handle dst_pending_id = dst_item->pending_id;
             int dst_pending_id = dst_item->node_id;
             const int src_slot = e.output_slot;
+
+            // TODO(yuanbyu): We don't need this if we require the subgraph
+            // given to an executor not to contain a sink node.
+            if (dst_item->is_sink) continue;
+
             bool dst_ready = false;
             bool dst_dead = false;
             bool dst_need_input = true;
 
-            int pending, dead;
-            iter_state->adjust_for_activation(dst_pending_id, &pending, &dead);
-            dst_dead = (dead > 0);
-            dst_ready = (pending==0);
+            {
+                int pending, dead;
+                iter_state->adjust_for_activation(dst_pending_id,
+                        &pending, &dead);
+                dst_dead = (dead > 0);
+                dst_ready = (pending==0);
+            }
 
             if (dst_need_input) {
                 const int dst_slot = e.input_slot;
                 const int dst_loc = dst_item->input_start + dst_slot;
-                input_tensors[dst_loc] = (*outputs)[src_slot];
+                if (e.is_last) {
+                    input_tensors[dst_loc] = std::move((*outputs)[src_slot]);
+                } else {
+                    input_tensors[dst_loc] = (*outputs)[src_slot];
+                }
             }
 
             // Add dst to the ready queue if it's ready
