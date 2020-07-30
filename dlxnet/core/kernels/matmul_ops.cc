@@ -74,7 +74,7 @@ namespace dlxnet{
                 if(!status.ok()){
                     ctx->SetStatus(errors::Internal("Get Kernel Failed : ", kernel_fn));
                 }
-                const uint64 N = m*n*k;
+                const uint64 N = m*n;
 
                 bool blas_launch_status = (*stream)
                     .ThenLaunch(se::ThreadDim(), se::BlockDim(N), kernel,

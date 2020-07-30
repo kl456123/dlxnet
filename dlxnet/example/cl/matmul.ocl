@@ -1,9 +1,18 @@
-__kernel void matmul(__global float *A, __global float *B, __global float *C,
+__kernel void matmul(__global int *A, __global int *B, __global int *C,
         long int m, long int n, long int k) {
+    // (m, k) * (k, n) 1-D buffer inputs
 
     // Get the index of the current element
-    int i = get_global_id(0);
+    int pos_c = get_global_id(0);
+
+    int pos_i = pos_c/n;
+    int pos_j = pos_c%n;
 
     // Do the operation
-    C[i] = A[i] + B[i];
+    C[pos_c] = 0;
+    for(int i=0;i<k;++i){
+        int pos_a = pos_i*k+i;//(pos_i, i)
+        int pos_b = i*n+pos_j;//(i, pos_j)
+        C[pos_c] += A[pos_a]*B[pos_b];
+    }
 }

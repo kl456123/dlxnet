@@ -253,25 +253,64 @@ namespace stream_executor{
         // make sure context is activated
         GpuStreamHandle stream;
         SE_RETURN_IF_ERROR(GetDefaultStream(context, &stream));
-        stream.enqueueCopyBuffer(cl::Buffer(gpu_src_ptr), cl::Buffer(gpu_dst_ptr), 0, 0, size);
-        return Status::OK();
+        if(CL_SUCCESS==stream.enqueueCopyBuffer(cl::Buffer(gpu_src_ptr),
+                    cl::Buffer(gpu_dst_ptr), 0, 0, size)){
+            return Status::OK();
+        }
+        return ::dlxnet::errors::Internal("Failed to Sync memcpy from device to device");
     }
 
     /*static*/ bool OCLDriver::AsynchronousMemcpyD2H(GpuContext context, void* host_dst,
             GpuDevicePtr gpu_src, uint64 size,
             GpuStreamHandle stream){
+        // if(CL_SUCCESS==stream.enqueueReadBuffer(cl::Buffer(gpu_src),
+                    // CL_FALSE, 0, size, host_dst)){
+            // return true;
+        // }
+        // return false;
+        cl_int err;
+        void* buffer_ptr = clEnqueueMapBuffer(stream(), gpu_src, CL_FALSE, CL_MAP_READ,
+                0, size, 0, 0, 0, &err);
+        memcpy(host_dst, buffer_ptr, size);
+
+        clEnqueueUnmapMemObject(stream(), gpu_src, buffer_ptr, 0, 0, 0);
+        if(err!=CL_SUCCESS){
+            return false;
+        }
+
         return true;
     }
 
     /*static*/ bool OCLDriver::AsynchronousMemcpyH2D(GpuContext context, GpuDevicePtr gpu_dst,
             const void* host_src, uint64 size,
             GpuStreamHandle stream){
+        // if(CL_SUCCESS==stream.enqueueWriteBuffer(cl::Buffer(gpu_dst),
+                    // CL_TRUE, 0, size, host_src)){
+            // int host_tmp[4]={0};
+            // stream.enqueueReadBuffer(cl::Buffer(gpu_dst),
+                    // CL_TRUE, 0, size, host_tmp);
+            // return true;
+        // }
+        // return false;
+        cl_int err;
+        void* buffer_ptr = clEnqueueMapBuffer(stream(), gpu_dst, CL_FALSE, CL_MAP_WRITE,
+                0, size, 0, 0, 0, &err);
+        memcpy(buffer_ptr, host_src, size);
+        clEnqueueUnmapMemObject(stream(), gpu_dst, buffer_ptr, 0, 0, 0);
+        if(err!=CL_SUCCESS){
+            return false;
+        }
+
         return true;
     }
 
     /*static*/ bool OCLDriver::AsynchronousMemcpyD2D(GpuContext context, GpuDevicePtr gpu_dst,
             GpuDevicePtr gpu_src, uint64 size,
             GpuStreamHandle stream){
-        return true;
+        if(CL_SUCCESS==stream.enqueueCopyBuffer(cl::Buffer(gpu_src),
+                    cl::Buffer(gpu_dst), 0, 0, size)){
+            return true;
+        }
+        return false;
     }
 }//namespace stream_executor
