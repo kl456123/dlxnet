@@ -9,3 +9,4 @@
 7. static checker of typed kernel
 8. mutex, condition and notify
 9. unique ptr, scoped ptr and shared ptr
+10. reconstruct stream executor of opencl using c api

@@ -178,6 +178,20 @@ namespace stream_executor{
                     return *this;
                 }
 
+            // Waits for an event object to be set.
+            // Note that ThenRecordEvent must have been called on the event before
+            // you call this function; otherwise the event will be considered complete
+            // and this wait will do nothing.
+            Stream &ThenWaitFor(Event *event);
+
+            // Inserts the specified event into the end of this stream. Once the stream
+            // has processed all events prior to the insertion point, the event will be
+            // marked as completed.
+            // The stream does not take ownership of event - meaning that event's lifetime
+            // must extend past the point at which it is marked complete!
+            Stream &ThenRecordEvent(Event *event);
+
+
             // Record a "start" event for the interval timer at this point in the
             // stream's execution (relative to the previously and subsequently enqueued
             // items in the stream's execution). Streams may be started/stopped multiple

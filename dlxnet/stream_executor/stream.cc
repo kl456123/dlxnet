@@ -133,14 +133,31 @@ namespace stream_executor{
     Stream &Stream::ThenWaitFor(Stream *other) {
         // VLOG_CALL(PARAM(other));
 
-        // CHECK(this != other) << "stream cannot wait for itself";
-        // if (ok() && other->ok()) {
-        // CheckError(parent_->CreateStreamDependency(this, other));
-        // } else {
-        // SetError();
-        // LOG(INFO) << DebugStreamPointers() << " did not wait for "
-        // << other->DebugStreamPointers();
-        // }
+        CHECK(this != other) << "stream cannot wait for itself";
+        if (ok() && other->ok()) {
+            // CheckError(parent_->CreateStreamDependency(this, other));
+        } else {
+            // SetError();
+            // LOG(INFO) << DebugStreamPointers() << " did not wait for "
+            // << other->DebugStreamPointers();
+        }
+        return *this;
+    }
+
+    Stream &Stream::ThenWaitFor(Event *event) {
+        // VLOG_CALL(PARAM(event));
+
+        if (ok()) {
+            port::Status status = parent_->WaitForEvent(this, event);
+            if (!status.ok()) {
+                LOG(ERROR) << "Error waiting for event in stream: "
+                    << status.error_message()
+                    << "; not marking stream as bad, as the Event object may be "
+                    << "at fault. Monitor for further errors.";
+            }
+        } else {
+            // LOG(INFO) << DebugStreamPointers() << " did not wait for an event.";
+        }
         return *this;
     }
 

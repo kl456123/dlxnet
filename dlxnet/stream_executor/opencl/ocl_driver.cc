@@ -4,8 +4,8 @@
 #include <cstring>
 
 #include "dlxnet/stream_executor/platform/port.h"
-#include "dlxnet/stream_executor/opencl/ocl_driver.h"
 #include "dlxnet/stream_executor/platform/logging.h"
+#include "dlxnet/stream_executor/opencl/ocl_driver.h"
 #include "dlxnet/stream_executor/lib/status_macros.h"
 #include "dlxnet/core/lib/core/errors.h"
 
@@ -189,6 +189,54 @@ namespace stream_executor{
         return Status::OK();
     }
 
+    /* static */ Status OCLDriver::DestroyEvent(GpuContext context,
+            GpuEventHandle* event) {
+        if ((*event)() == nullptr) {
+            return Status(port::error::INVALID_ARGUMENT,
+                    "input event cannot be null");
+        }
+
+        // ScopedActivateContext activated{context};
+        // clReleaseEvent(*event);
+        return Status::OK();
+    }
+
+    /* static */ Status OCLDriver::RecordEvent(GpuContext context,
+            GpuEventHandle event,
+            GpuStreamHandle stream) {
+        // ScopedActivateContext activated{context};
+        // RETURN_IF_CUDA_RES_ERROR(cuEventRecord(event, stream),
+        // "Error recording CUDA event");
+        return Status::OK();
+    }
+
+    /* static */ bool OCLDriver::WaitStreamOnEvent(GpuContext context,
+            GpuStreamHandle stream, GpuEventHandle event) {
+        // ScopedActivateContext activation(context);
+        GpuStatus res = clWaitForEvents(1, &event());
+        if (res != CL_SUCCESS) {
+            LOG(ERROR) << "could not wait stream on event: " << res;
+            return false;
+        }
+
+        return true;
+    }
+
+    /* static */ port::Status OCLDriver::QueryEvent(GpuContext context,
+            GpuEventHandle event) {
+        // ScopedActivateContext activated{context};
+        // CUresult res = cuEventQuery(event);
+        GpuStatus res = CL_SUCCESS;
+        // if (res != CUDA_SUCCESS && res != CUDA_ERROR_NOT_READY) {
+        // return port::Status(
+        // port::error::INTERNAL,
+        // absl::StrFormat("failed to query event: %s", ToString(res)));
+        // }
+
+        return Status::OK();
+    }
+
+
     Status OCLDriver::LaunchKernel(GpuContext context,
             GpuFunctionHandle kernel, cl::NDRange gws, cl::NDRange lws,
             GpuStreamHandle stream){
@@ -264,8 +312,8 @@ namespace stream_executor{
             GpuDevicePtr gpu_src, uint64 size,
             GpuStreamHandle stream){
         // if(CL_SUCCESS==stream.enqueueReadBuffer(cl::Buffer(gpu_src),
-                    // CL_FALSE, 0, size, host_dst)){
-            // return true;
+        // CL_FALSE, 0, size, host_dst)){
+        // return true;
         // }
         // return false;
         cl_int err;
@@ -285,11 +333,11 @@ namespace stream_executor{
             const void* host_src, uint64 size,
             GpuStreamHandle stream){
         // if(CL_SUCCESS==stream.enqueueWriteBuffer(cl::Buffer(gpu_dst),
-                    // CL_TRUE, 0, size, host_src)){
-            // int host_tmp[4]={0};
-            // stream.enqueueReadBuffer(cl::Buffer(gpu_dst),
-                    // CL_TRUE, 0, size, host_tmp);
-            // return true;
+        // CL_TRUE, 0, size, host_src)){
+        // int host_tmp[4]={0};
+        // stream.enqueueReadBuffer(cl::Buffer(gpu_dst),
+        // CL_TRUE, 0, size, host_tmp);
+        // return true;
         // }
         // return false;
         cl_int err;

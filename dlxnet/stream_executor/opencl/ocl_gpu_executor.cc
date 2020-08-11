@@ -1,9 +1,16 @@
 #include "dlxnet/stream_executor/opencl/ocl_gpu_executor.h"
 #include "dlxnet/stream_executor/opencl/ocl_driver.h"
-#include "dlxnet/stream_executor/opencl/ocl_stream.h"
+#include "dlxnet/stream_executor/opencl/ocl_event.h"
 #include "dlxnet/core/lib/core/errors.h"
+#include "absl/strings/str_format.h"
 
 namespace stream_executor{
+    namespace{
+        static GpuEvent* AsGpuEvent(Event* event) {
+            DCHECK(event != nullptr);
+            return static_cast<GpuEvent*>(event->implementation());
+        }
+    } // namespace
 
     OCLExecutor::~OCLExecutor(){
         // note that all c++ api of opencl will release when recount == 0
@@ -135,11 +142,19 @@ namespace stream_executor{
 
     // event
     port::Status OCLExecutor::WaitForEvent(Stream* stream, Event* event){
-        return port::Status::OK();
+        if (OCLDriver::WaitStreamOnEvent(context_, AsGpuStream(stream)->gpu_stream(),
+                    AsGpuEvent(event)->gpu_event())) {
+            return port::Status::OK();
+        } else {
+            return port::Status(
+                    port::error::INTERNAL,
+                    absl::StrFormat("error recording waiting for CUDA event on stream %p",
+                        stream));
+        }
     }
 
     port::Status OCLExecutor::RecordEvent(Stream* stream, Event* event){
-        return port::Status::OK();
+        return AsGpuEvent(event)->Record(AsGpuStream(stream));
     }
 
     port::Status OCLExecutor::AllocateEvent(Event* event){

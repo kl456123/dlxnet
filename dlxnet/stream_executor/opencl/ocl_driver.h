@@ -4,6 +4,7 @@
 
 #include "dlxnet/stream_executor/lib/status.h"
 #include "dlxnet/stream_executor/gpu/gpu_types.h"
+#include "dlxnet/stream_executor/lib/statusor.h"
 
 
 namespace stream_executor{
@@ -36,7 +37,30 @@ namespace stream_executor{
             static bool CreateStream(cl::Context context,
                     cl::CommandQueue* command_queue);
 
-            static Status InitEvent(cl::Context context, cl::Event* result);
+            static Status InitEvent(cl::Context context, GpuEventHandle* result);
+
+            // Records that an event occurred when execution reaches the current point in
+            // thestream via cuEventRecord.
+            // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g95424d3be52c4eb95d83861b70fb89d1
+            static Status RecordEvent(GpuContext context, GpuEventHandle event,
+                    GpuStreamHandle stream);
+
+            // Destroys *event and turns it into a nullptr. event may not be null, but
+            // *event may be, via cuEventDestroy
+            // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g593ec73a8ec5a5fc031311d3e4dca1ef
+            static Status DestroyEvent(GpuContext context, GpuEventHandle* event);
+
+            // Polls (without blocking) to determine the status of an event - pending or
+            // complete (or an error status).
+            // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__EVENT.html#group__CUDA__EVENT_1g6f0704d755066b0ee705749ae911deef
+            static port::Status QueryEvent(GpuContext context,
+                    GpuEventHandle event);
+
+            // Causes stream to wait for event to trigger before proceeding via
+            // cuStreamWaitEvent.
+            // http://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__STREAM.html#axzz334nAXAhM
+            static bool WaitStreamOnEvent(GpuContext context, GpuStreamHandle stream,
+                    GpuEventHandle event);
 
             static bool GetProgramKernel(cl::Context context, cl::Program program,
                     const char* kernelname, cl::Kernel* kernel);
