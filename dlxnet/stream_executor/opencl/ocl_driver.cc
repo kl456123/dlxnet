@@ -269,7 +269,7 @@ namespace stream_executor{
         // }
         // return false;
         cl_int err;
-        void* buffer_ptr = clEnqueueMapBuffer(stream(), gpu_src, CL_FALSE, CL_MAP_READ,
+        void* buffer_ptr = clEnqueueMapBuffer(stream(), gpu_src, CL_TRUE, CL_MAP_READ,
                 0, size, 0, 0, 0, &err);
         memcpy(host_dst, buffer_ptr, size);
 
@@ -293,7 +293,7 @@ namespace stream_executor{
         // }
         // return false;
         cl_int err;
-        void* buffer_ptr = clEnqueueMapBuffer(stream(), gpu_dst, CL_FALSE, CL_MAP_WRITE,
+        void* buffer_ptr = clEnqueueMapBuffer(stream(), gpu_dst, CL_TRUE, CL_MAP_WRITE,
                 0, size, 0, 0, 0, &err);
         memcpy(buffer_ptr, host_src, size);
         clEnqueueUnmapMemObject(stream(), gpu_dst, buffer_ptr, 0, 0, 0);
